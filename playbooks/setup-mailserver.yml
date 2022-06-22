@@ -1,0 +1,72 @@
+---
+- name: Setup the Mailserver
+  hosts: mailserver
+  become: true
+  tasks:  
+
+  - name: Install all required packages for the Mailserver
+    apt:
+      pkg:
+      - nmap
+      - apache2
+      - curl
+      - tcpdump
+      - procmail
+      - dnsutils
+      - zip
+  
+  - name: Remove packages that may conflict with the server
+    debug:
+      msg: "Hit"
+  
+  - name: Disable services not needed
+    debug:
+      msg: "Hit"
+
+  - name: Change the hostname
+    debug:
+      msg: "Hit"
+
+# primary_domain=$1
+# primary_hostname=$2
+# extIP=$3
+
+# echo "Updating and Installing Dependencies"
+# echo "deb http://ftp.debian.org/debian stretch-backports main" >> /etc/apt/sources.list
+# apt-get -qq update > /dev/null 2>&1
+# #apt-get -qq -y upgrade > /dev/null 2>&1
+# apt-get install -qq -y nmap apache2 curl tcpdump > /dev/null 2>&1
+# apt-get install -qq -y procmail dnsutils screen zip > /dev/null 2>&1
+# apt-get remove -qq -y exim4 exim4-base exim4-config exim4-daemon-light > /dev/null 2>&1
+# rm -r /var/log/exim4/ > /dev/null 2>&1
+
+# update-rc.d nfs-common disable > /dev/null 2>&1
+# update-rc.d rpcbind disable > /dev/null 2>&1
+
+# echo "IPv6 Disabled"
+
+# cat <<-EOF >> /etc/sysctl.conf
+# net.ipv6.conf.all.disable_ipv6 = 1
+# net.ipv6.conf.default.disable_ipv6 = 1
+# net.ipv6.conf.lo.disable_ipv6 = 1
+# net.ipv6.conf.eth0.disable_ipv6 = 1
+# net.ipv6.conf.eth1.disable_ipv6 = 1
+# net.ipv6.conf.ppp0.disable_ipv6 = 1
+# net.ipv6.conf.tun0.disable_ipv6 = 1
+# EOF
+
+# sysctl -p > /dev/null 2>&1
+
+# echo "Changing Hostname"
+
+# cat <<-EOF > /etc/hosts
+# 127.0.1.1 $primary_hostname $primary_domain
+# 127.0.0.1 localhost $primary_domain
+# EOF
+
+# cat <<-EOF > /etc/hostname
+# $primary_hostname
+# EOF
+
+# exit 0
+

@@ -1,0 +1,53 @@
+
+- name: Install all Docker dependencies
+  apt:
+    pkg:
+      - ca-certificates
+      - gpg
+      - gnupg
+      - lsb-release
+      - curl
+    state: present
+
+- name: Remove the Docker GPG apt key if present (need to or next step fails)
+  ansible.builtin.file:
+    path: "/usr/share/keyrings/docker-archive-keyring.gpg"
+    state: absent
+
+- name: Add Docker GPG apt Key
+  shell: |
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+- name: Add the Docker official repository for Debian to APT repos
+  shell: |
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+- name: Index the new repository into the cache
+  apt:
+    name: "*"
+    state: latest
+    update_cache: yes
+    force_apt_get: yes
+
+- name: Install Docker and all Docker Plugins
+  apt: 
+    pkg:
+      - docker-ce
+      - docker-ce-cli 
+      - containerd.io 
+      - docker-compose-plugin
+    state: latest
+
+- name: Check if UFW configured to govern docker routing
+  shell: grep "BEGIN UFW AND DOCKER" /etc/ufw/after.rules
+  register: ufw_config_set
+  check_mode: no
+  ignore_errors: yes
+  
+- name: Set the UFW config to govern docker routing (or else firewall rules will fail for docker containers)
+  ansible.builtin.lineinfile: 
+    path: /etc/ufw/after.rules
+    line: "\n####### BEGIN UFW AND DOCKER #######\n*filter\n:ufw-user-forward - [0:0]\n:DOCKER-USER - [0:0]\n-A DOCKER-USER -j RETURN -s 10.0.0.0/8\n-A DOCKER-USER -j RETURN -s 172.16.0.0/12\n-A DOCKER-USER -j RETURN -s 192.168.0.0/16\n-A DOCKER-USER -j ufw-user-forward\n-A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16\n-A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8\n-A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12\n-A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 192.168.0.0/16\n-A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 10.0.0.0/8\n-A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 172.16.0.0/12\n-A DOCKER-USER -j RETURN\nCOMMIT\n# END UFW AND DOCKER"
+    insertafter: EOF
+  # When the return code is 1, the content is missing
+  when: ufw_config_set.rc == 1

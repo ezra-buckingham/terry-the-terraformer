@@ -1,0 +1,24 @@
+---
+- name: Wait for Startup Scripts to complete
+  become: true
+  hosts: all
+  gather_facts: false
+  tasks:
+
+  - name: Wait for system to be reachable
+    wait_for_connection:
+
+  - name: Wait for AWS setup to complete
+    block:
+      - name: Wait for cloud-init / user-data to finish
+        command: cloud-init status --wait
+        changed_when: false
+    when: provider == 'aws'
+
+  - name: Wait for DigialOcean setup to complete
+    block:
+      - name: Wait until cloud service is installed before continuing
+        wait_for:
+          path: /etc/systemd/system/droplet-agent.service
+    when: provider == 'digitalocean'
+  

@@ -1,0 +1,8 @@
+click
+python-terraform
+ansible-runner
+boto3
+jinja2
+requests
+uuid
+ansible

@@ -1,0 +1,116 @@
+{
+	"blocks": [
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				"text": "🛠️ Build - {{ operation }}",
+				"emoji": true
+			}
+		},
+		{
+			"type": "divider"
+		},
+    {% for resource in resources %}
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				{% if resource.type == 'categorize' %}
+				"text": "🖥️  Categorization - {{ resource.name }}",
+				{% elif resource.type == 'teamserver' %}
+				"text": "🕹️  Teamserver - {{ resource.name }}",
+				{% elif resource.type == 'redirector' %}
+				"text": "⏩  Redirector - {{ resource.name }}",
+				{% elif resource.type == 'bare' %}
+				"text": "🗒️  Bare Server - {{ resource.name }}",
+				{% endif %}
+				"emoji": true
+			}
+		},
+		{
+			"type": "section",
+			"fields": [
+				{# Start parsing for the domains section #}
+				{% if resource.domain_map %}
+				{% for domain in resource.domain_map %}
+				{
+					"type": "mrkdwn",
+					"text": ">*Domain:* {{ domain.domain }} \n>*Registrar:* `{{ domain.registrar }}`\n>*Records*:{% for record in domain.domain_records %}\n> + *Subdomain (Record Type):* `{% if record.subdomain | length == 0 %}.{% else %}{{record.subdomain}}{% endif %} ({{record.record_type}})`{% endfor %}"
+				},
+				{% endfor %}
+				{% endif %}
+				{# End parsing for the domains section #}
+				{
+					"type": "mrkdwn",
+					"text": "*Provider:* `{{ resource.provider }}`\n*IPv4:* `{{ resource.public_ip }}`{% if resource.redirect_to %}\n*Redirection:* {{ resource.redirect_to }}{% endif %}"
+				}
+			]
+		},
+		
+		{# Start parsing for the c2 section #}
+		{% if resource.c2_frameworks %}
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "_*Installed Command and Control Software*_"
+			}
+		},
+		{% for c2 in resource.c2_frameworks.keys() %}
+		{% if c2 == 'cobaltstrike' %}
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ">CobaltStrike: `{{ resource.public_ip }}:1111`"
+			}
+		},
+		{% elif c2 == 'deimos' %}
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ">Deimos: `{{ resource.public_ip }}:2222`"
+			},
+			"accessory": {
+				"type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": "Diemos Console 🎛️",
+					"emoji": true
+				},
+				"style": "primary",
+				"value": "deimos",
+				"url": "https://{{ resource.public_ip }}:2222",
+				"action_id": "deimos-link"
+			}
+		},
+		{% elif c2 == 'sliver' %}
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ">Sliver: `{{ resource.public_ip }}:3333` (configs at `{{ resource.public_ip }}:/opt/sliver/mount`)"
+			}
+		},
+		{% endif %}
+		{% endfor %}
+		{% endif %}
+		{# End parsing for the c2 section #}
+
+		{
+			"type": "divider"
+		},
+		{% endfor %}
+		{# End parsing of resource #}
+
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "```{{ command_run }}``` Run Time: `{{ start_time }} - {{ end_time }}`"
+			}
+		}
+	]
+}

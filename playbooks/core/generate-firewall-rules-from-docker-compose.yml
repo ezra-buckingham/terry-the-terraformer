@@ -1,0 +1,14 @@
+
+- name: "Open up the {{ service.container_name }} ports to the team (system ports)"
+  shell: |
+    ufw allow from {{ item[0].value.public_ip }} proto {{ item[1] | split('/') | last }} to any port {{ item[1] | split(':') | first }}
+  loop: "{{ team | dict2items | product(service.ports) | list }}"
+  loop_control:
+    label: "{{ item[0].value.user }} -> {{ item[1] }}"
+    
+- name: "Open up the {{ service.container_name }} ports to the team (container routes)"
+  shell: |
+    ufw route allow from {{ item[0].value.public_ip }} proto {{ item[1] | split('/') | last }} to any port {{ item[1] | split(':') | last | split('/') | first }}
+  loop: "{{ team | dict2items | product(service.ports) | list }}"
+  loop_control:
+    label: "{{ item[0].value.user }} -> {{ item[1] }} (route)"

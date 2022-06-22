@@ -1,0 +1,32 @@
+
+# Get the AMI for Debian Buster
+data "aws_ami" "ami-{{ name }}" { # Value provided by Jinja
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["debian-10-amd64-*"]
+  }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = ["136693071363"] # Debian Owner ID
+}
+
+resource "aws_instance" "{{ name }}" { # Value Provided by Jinja
+
+  ami = data.aws_ami.ami-{{ name }}.id  # Value Provided by Jinja
+  instance_type = "{{ terraform_size_reference }}"
+  key_name = "{{ operation + '_' + provider + '_key' }}"  # Value provided by Jinja
+
+  root_block_device {
+    delete_on_termination = true
+    volume_size = {{ terraform_disk_size_reference }}
+  }
+
+  tags = {
+    Name = "{{ operation + '-' + name }}"  # Value provided by Jinja
+  }
+}

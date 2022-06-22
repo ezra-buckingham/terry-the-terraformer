@@ -1,0 +1,25 @@
+---
+- name: Install BitWarden CLI
+  hosts: localhost
+  tasks:
+
+  # We will download BitWarden from the site and then refernce the download location to unarchive it
+  - name: Download the BitWarden CLI
+    register: bw_download
+    get_url:
+      url: https://vault.bitwarden.com/download/?app=cli&platform=linux
+      dest: /tmp/
+
+  # Unarchive the package so we can use it and add it to path
+  - name: Unarchive the BitWarden CLI package
+    register: bw_executable
+    ansible.builtin.unarchive:
+      src: "{{ bw_download.dest }}"
+      dest: /tmp/
+      mode: a+x
+      remote_src: yes
+
+  # Move the BitWarden CLI to the bin folder
+  - name: Move the extracted BitWarden CLI to bin
+    ansible.builtin.shell: "mv {{ bw_executable.dest  }} /bin"
+    become: yes

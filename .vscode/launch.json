@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Building REPLICAS",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "./terry.py",
+      "console": "integratedTerminal",
+      "args": [
+        "-o",
+        "testing_terry",
+        "-v",
+        "-f",
+        "-a",
+        "server", "-p", "digitalocean", "-t", "bare", "-cT", "cobaltstrike", "-rT", "aws:dns:dom.focusfireandsecuity.net:aws"
+      ],
+      //"preLaunchTask": "Remove terry_testing files"
+    },
+    {
+      "name": "Testing Terry",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "./terry.py",
+      "console": "integratedTerminal",
+      "args": [
+        "-o",
+        "testing_terry",
+        "-v",
+        "-f",
+        "destroy", "-r"
+      ],
+      //"preLaunchTask": "Remove terry_testing files"
+    },
+  ]
+}

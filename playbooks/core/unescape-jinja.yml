@@ -1,0 +1,23 @@
+
+# Need to set the following facts before using these tasks
+# - jinja_unescape_paths [list]
+
+- name: "Unescape all Jinja opening braces inside of the jinja_unescape_path file (will ignore errors)"
+  ansible.builtin.replace:
+    path: "{{ jinja_unescape_path }}"
+    regexp: \[
+    replace: '{'
+  ignore_errors: yes
+  loop: "{{ jinja_unescape_paths }}"
+  loop_control:
+    loop_var: "jinja_unescape_path"
+
+- name: "Unescape all Jinja closing braces inside of the jinja_unescape_path file (will ignore errors)"
+  ansible.builtin.replace:
+    path: "{{ jinja_unescape_path }}"
+    regexp: \]
+    replace: '}'
+  ignore_errors: yes
+  loop: "{{ jinja_unescape_paths }}"
+  loop_control:
+    loop_var: "jinja_unescape_path"

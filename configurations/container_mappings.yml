@@ -1,0 +1,173 @@
+################################# Terry Docker Compose #################################
+
+# This is a standard Docker Compose file except for the presence of the "required_args",
+# "pre_run_commands", and "post_run_commands" which all MUST be blank if there is nothing to 
+# run / no required args. The "required_args" are the required arguments to run the container
+# If youvhave tasks you need to run, they should be VALID Ansible tasks and all Jinja templates
+# MUST be escaped with [[ ]] in order to work. 
+
+# NOTE: Jinja values that are NOT escaped are populated by Ansible at playbook init and if
+# there are undefined values, Ansible will throw an error
+
+########################################################################################
+
+services:
+  cobaltstrike:
+    container_name: cobaltstrike
+    image: registry.gitlab.com/5tag3/terry-container-registry/cobaltstrike:latest
+    command: "[[ ansible_ssh_host ]] [[ lookup('env', 'COBALTSTRIKE_PASSWORD') ]] /opt/cobaltstrike/mount/c2.profile"
+    stdin_open: false
+    tty: false
+    ports:
+      - "1111:50050/tcp"
+      - "1443:443/tcp"
+      - "180:80/tcp"
+      - "153:53/udp"
+    volumes:
+      - type: bind
+        source: /opt/container/cobaltstrike/mount
+        target: /opt/cobaltstrike/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+      - COBALTSTRIKE_PASSWORD
+      - COBALTSTRIKE_MALLEABLE_C2
+    pre_run_commands: 
+      - name: Copy over the Malleable C2 profile (when defined)
+        ansible.builtin.copy: 
+          # Must escape double quotes so Jinja template is populated
+          src: "[[ lookup('env', 'COBALTSTRIKE_MALLEABLE_C2') ]]"
+          dest: "/opt/container/cobaltstrike/mount/c2.profile"
+        when: "lookup('env', 'COBALTSTRIKE_MALLEABLE_C2') | length > 0"
+      - name: Create a dummy Malleable C2 profile (when not defined)
+        ansible.builtin.copy:
+          dest: "/opt/container/cobaltstrike/mount/c2.profile"
+          content: | 
+            set sample_name "Terry";
+            
+            http-get {
+              set uri "/itstheredteam";
+              client {
+                metadata {
+                  netbiosu;
+                  parameter "tmp";
+                }
+              }
+              server {
+                header "Content-Type" "application/octet-stream";
+                output {
+                  print;
+                }
+              }
+            }
+            
+            http-post {
+              set uri "/isittheredteam";
+              client {
+                header "Content-Type" "application/octet-stream";
+                id {
+                  uri-append;
+                }
+                output {
+                  print;
+                }
+              }
+              server {
+                header "Content-Type" "text/html";
+                output {
+                  print;
+                }
+              }
+            }
+        when: "lookup('env', 'COBALTSTRIKE_MALLEABLE_C2')| length <= 0"
+    post_run_commands: 
+
+  deimos:
+    container_name: deimos
+    image: registry.gitlab.com/5tag3/terry-container-registry/deimos:latest
+    stdin_open: false
+    tty: false
+    command: ""
+    ports:
+      - "2222:8443/tcp"
+      - "2443:443/tcp"
+      - "280:80/tcp"
+      - "253:53/udp"
+    volumes:
+      - type: bind
+        source: /opt/container/deimos/mount
+        target: /opt/sliver/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+    pre_run_commands: 
+    post_run_commands: 
+
+  sliver:
+    container_name: sliver
+    image: registry.gitlab.com/5tag3/terry-container-registry/sliver:latest
+    stdin_open: false
+    tty: false
+    command: "daemon -p 3333" 
+    ports:
+      - "3333:3333/tcp"
+      - "3443:443/tcp"
+      - "380:80/tcp"
+      - "353:53/udp"
+    volumes:
+      - type: bind
+        source: /opt/container/sliver/mount
+        target: /opt/sliver/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+    pre_run_commands: 
+      - name: "Delete any existing sliver configs"
+        ansible.builtin.file:
+          path: "/opt/container/sliver/mount/[[ old_sliver_user.value.user ]].conf"
+          state: absent
+        loop: "[[ team | dict2items ]]"
+        loop_control:
+          loop_var: old_sliver_user
+          label: "[[ old_sliver_user.value.user ]]"
+    post_run_commands: 
+      - name: "Generate the sliver configs for each user" 
+        command: "docker exec sliver /opt/sliver/sliver-server operator --lhost [[ ansible_ssh_host ]] --lport 3333 --name [[ new_sliver_user.value.user ]] --save /opt/sliver/mount/[[ new_sliver_user.value.user ]].conf"
+        loop: "[[  team | dict2items ]]"
+        loop_control: 
+          loop_var: new_sliver_user
+          label: "[[ new_sliver_user.value.user ]]"
+
+  gophish:
+    container_name: gophish
+    image: registry.gitlab.com/5tag3/terry-container-registry/gophish:latest
+    stdin_open: false
+    tty: false
+    command: ""
+    ports:
+      - "4444:4444/tcp"
+      - "443:443/tcp"
+    volumes:
+      - type: bind
+        source: /opt/container/gophish/mount
+        target: /opt/gophish/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+    pre_run_commands:
+    post_run_commands:
+
+  evilginx2:
+    container_name: evilginx2
+    image: registry.gitlab.com/5tag3/terry-container-registry/evilginx2:latest
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    command: "-developer"
+    ports:
+      - "5443:443/tcp"
+      - "580:80/tcp"
+      - "553:53/udp"
+    volumes:
+      - type: bind
+        source: /opt/container/evilginx2/mount
+        target: /opt/evilginx2/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+    pre_run_commands:
+    post_run_commands:

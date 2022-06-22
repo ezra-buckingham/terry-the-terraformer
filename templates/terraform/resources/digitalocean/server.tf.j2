@@ -1,0 +1,23 @@
+# Create the Volume
+resource "digitalocean_volume" "volume-{{ name }}" {
+  region = "nyc3"
+  name = "volume-{{ name }}"
+  size = {{ terraform_disk_size_reference }}
+  initial_filesystem_type = "ext4"
+  description = "Disk volume for {{ name }}"
+}
+
+# Create the Droplet
+resource "digitalocean_droplet" "{{ name }}" { # Value provided by Jinja
+  image = "debian-11-x64"
+  name = "{{ operation.replace("_","-") + '-' + name }}"{# Need to replace underscores since this is set as the droplet hostname #} # Value provided by Jinja 
+  region = "nyc3"
+  size = "{{ terraform_size_reference }}"
+  ssh_keys = [ digitalocean_ssh_key.{{ operation + '_' + provider + '_key' }}.fingerprint ] # Value provided by Jinja
+}
+
+# Attach the Volume
+resource "digitalocean_volume_attachment" "volume-attachment-{{ name }}" {
+  droplet_id = digitalocean_droplet.{{ name }}.id
+  volume_id = digitalocean_volume.volume-{{ name }}.id
+}

@@ -1,0 +1,28 @@
+
+- name: Install Apache2
+  apt: 
+    name: apache2
+    state: latest
+    update_cache: true
+
+- name: Install Apache2 modifications
+  shell: |
+    a2enmod rewrite proxy proxy_http ssl proxy_html headers
+
+- name: Start Apache2
+  service:
+    name: apache2
+    state: started
+  
+- name: Change Apache2 config to allow for mod-rewrite
+  ansible.builtin.replace:
+    path: /etc/apache2/apache2.conf
+    after: '<Directory /var/www/>'
+    before: '</Directory>'
+    regexp: ^\tAllowOverride None$
+    replace: '\tAllowOverride All'
+  
+- name: Restart the Apache service
+  service:
+    name: apache2
+    state: restarted

@@ -1,0 +1,8 @@
+
+- name: Restart the UFW Service
+  shell: |
+    systemctl restart ufw
+
+- name: Enable the new firewall rules
+  shell: |
+    ufw --force enable

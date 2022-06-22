@@ -1,0 +1,59 @@
+# Can inline each of these if needed
+pki:
+  ca: /opt/nebula/ca.crt
+  cert: /opt/nebula/host.crt
+  key: /opt/nebula/host.key
+
+static_host_map:
+  "{{ lighthouse_nebula_ip }}": ["{{ lighthouse_public_ip }}:4242"]
+
+lighthouse:
+  am_lighthouse: {% if am_lighthouse is undefined %}false{% else %}true{% endif %}
+
+  interval: 60
+  # Hosts will be EMPTY on the Lighthouse node
+  hosts: 
+{% if am_lighthouse is undefined %}
+    - "{{ lighthouse_nebula_ip }}"
+{% endif %}
+
+listen:
+  host: 0.0.0.0
+  port: 4242
+
+punchy:
+  punch: true
+
+tun:
+  disabled: false
+  dev: nebula1
+  drop_local_broadcast: false
+  drop_multicast: false
+  tx_queue: 500
+  mtu: 1300
+  routes:
+  unsafe_routes:
+
+logging:
+  level: info
+  format: text
+
+# Nebula security group configuration
+firewall:
+  conntrack:
+    tcp_timeout: 12m
+    udp_timeout: 3m
+    default_timeout: 10m
+    max_connections: 100000
+
+  outbound:
+    # Allow all outbound traffic from this node
+    - port: any
+      proto: any
+      host: any
+
+  inbound:
+    # Allow all inbound traffic from this node
+    - port: any
+      proto: any
+      host: any

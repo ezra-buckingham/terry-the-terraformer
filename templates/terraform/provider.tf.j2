@@ -1,0 +1,11 @@
+terraform {
+  required_providers {
+    {% for provider in required_providers %}
+    {{ provider.name }} = {
+      source = "{{ provider.source }}"
+      version = "{{ provider.version }}"
+    }{% endfor %}
+  }
+}
+{% for provider in required_providers %}
+provider "{{ provider.name }}" { }{% endfor %}

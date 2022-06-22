@@ -1,0 +1,6 @@
+{# Note that the data keyword is used here so that we use the existing hosted zone #}
+
+# Names must not begin with a digit, so placing underscore prepended to the root domain name for that reason
+data "aws_route53_zone" "zone-{{ root_domain }}" { # Value provided by Jinja
+  name = "{{ domain }}"
+}

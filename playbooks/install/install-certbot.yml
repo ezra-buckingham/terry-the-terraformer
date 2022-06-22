@@ -1,0 +1,22 @@
+
+- name: Install snapd
+  apt:
+    name: snapd
+    state: latest
+
+- name: Install snap dependencies 
+  shell: |
+    snap install core && snap refresh core
+
+- name: Install certbot from snap
+  shell: |
+    snap install --classic certbot
+  
+- name: Verify that the link for cerbot doesn't exist in PATH
+  ansible.builtin.file:
+    path: /usr/bin/certbot
+    state: absent
+
+- name: Create the symbolic link for cerbot to be in PATH
+  shell: | 
+    ln -s /snap/bin/certbot /usr/bin/certbot

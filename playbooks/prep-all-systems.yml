@@ -1,0 +1,123 @@
+---
+- name: Add Team Accounts, SSH Access, and UFW Firewall
+  gather_facts: true
+  hosts: all
+  become: true
+  tasks:
+
+  - name: Ensure the admin user group exists
+    ansible.builtin.group:
+      name: admin
+      state: present
+
+  - name: Add the team as users to server
+    ansible.builtin.user:
+      name: "{{ item.value.user }}"
+      state: present
+      create_home: yes
+      groups: admin
+      shell: /bin/bash
+    loop: "{{ team | dict2items }}"
+    loop_control:
+      label: "{{ item.value.user }}"
+  
+  - name: Add SSH Keys
+    authorized_key:
+      user: "{{ item.value.user }}"
+      state: present
+      key: "{{ item.value.public_key }}"
+    loop: "{{ team | dict2items }}"
+    loop_control:
+      label: "{{ item.value.user }}"
+
+  - name: Allow admin users to sudo without a password
+    lineinfile:
+      dest: /etc/sudoers
+      state: present
+      regexp: "^%admin"
+      line: "%admin ALL=(ALL) NOPASSWD:ALL"
+
+  - name: Update APT repositories cache and install "ufw" and "tmux" packages
+    apt:
+      pkg:
+        - ufw
+        - tmux
+      update_cache: yes
+      lock_timeout: 360
+
+  - name: Block if we are to install nebula
+    when: nebula
+    block:
+
+      - name: Allow all Nebula traffic in the Lighthouse firewall
+        when: am_lighthouse is defined and am_lighthouse
+        shell: |
+          ufw allow from any proto udp to any port 4242
+
+      - name: Install Nebula
+        import_tasks: "{{ playbook_dir }}/install/install-nebula.yml"
+      
+      - name: Deploy the Nebula Root certificate
+        ansible.builtin.copy:
+          src: "{{ op_directory }}/nebula/ca.crt"
+          dest: "/opt/nebula/ca.crt"
+
+      - name: Deploy the Nebula client certificate
+        ansible.builtin.copy:
+          src: "{{ op_directory }}/nebula/{{ uuid }}.crt"
+          dest: "/opt/nebula/host.crt"
+
+      - name: Deploy the Nebula client key
+        ansible.builtin.copy:
+          src: "{{ op_directory }}/nebula/{{ uuid }}.key"
+          dest: "/opt/nebula/host.key"
+
+      - name: Deploy the Nebula configuration
+        ansible.builtin.template:
+          src: '{{ playbook_dir }}/../templates/nebula/nebula-configuration.yaml.j2'
+          dest: '/opt/nebula/config.yaml'
+
+      - name: Create the Nebula service
+        ansible.builtin.copy: 
+          dest: /etc/systemd/system/nebula.service
+          content: |
+            [Unit]
+            Description=Nebula Mesh VPN Service
+
+            [Service]
+            Type=simple
+            User=root
+            StandardOutput=syslog
+            StandardError=syslog
+            WorkingDirectory=/opt/nebula
+            ExecStart=/opt/nebula/nebula -config config.yaml
+
+            [Install]
+            WantedBy=multi-user.target
+
+      - name: Load the new service file and start the service (lighthouse first)
+        when: am_lighthouse is defined and am_lighthouse
+        shell: |
+          systemctl daemon-reload && systemctl --now enable nebula.service
+      
+      - name: Load the new service file and start the service (all other systems)
+        when: am_lighthouse is undefined
+        shell: |
+          systemctl daemon-reload && systemctl --now enable nebula.service
+
+      - name: Open the UFW firewall to allow Nebula subnet to communicate freely
+        shell: |
+          ufw allow in on nebula1 && ufw route allow in on nebula1
+
+
+  - name: Prep the UFW Firewall
+    shell: |
+      ufw default deny incoming
+      ufw allow from {{ item.value.public_ip }} proto tcp to any port 22 
+    loop: "{{ team | dict2items }}"
+    loop_control:
+      label: "{{ item.value.user }}"
+    
+  - name: Enforce firewall rules
+    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+      

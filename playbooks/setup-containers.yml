@@ -1,0 +1,121 @@
+---
+- name: Set up the servers with containers
+  become: true
+  hosts: all
+  vars_files:
+    - '{{ playbook_dir }}/../configurations/container_mappings.yml'
+  vars:
+    jinja_unescape_paths: []
+  tasks:
+
+  - name: Verify UFW installed
+    apt:
+      name: ufw
+      state: present
+
+  # Catch all, if there are no containers defined, there will be no execution
+  - name: Check if containers defined
+    when: containers is defined
+    block:
+
+    - name: Install Docker on the host
+      include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
+
+    - name: Create directories for each containers for on the host
+      ansible.builtin.file:
+        path: /opt/container/{{ item.key }} 
+        state: directory
+      loop: "{{ containers | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+    
+    - name: Create mount directory for each container to attach to at runtime
+      ansible.builtin.file:
+        path: /opt/container/{{ item.key }}/mount
+        state: directory
+      loop: "{{ containers | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+
+    - name: Perform tasks on the localhost
+      delegate_to: localhost # Run only locally
+      become: false # Do not try to run as sudo
+      block:
+
+        - name: Get Docker configuration for selected continers from container_mappings.yml
+          set_fact:
+            docker_services: '{{ containers.keys() | list | map("extract", services) }}'
+
+        - name: Build the valid docker-compose file locally based on the docker_services fact (stripping out Terry-specific values)
+          ansible.builtin.template:
+            src: '{{ playbook_dir }}/../templates/docker/docker-compose.yml.j2'
+            dest: '{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_docker-compose.yml'
+
+        - name: Append the new the docker-compose.yml file to the jinja_unescape_paths list for later processing
+          set_fact:
+            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_docker-compose.yml" ]'
+        
+        - name: Append all existing pre_run_commands and post_run_commands to the jinja_unescape_paths list for later processing
+          set_fact:
+            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml", "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml" ]'
+          loop: "{{ docker_services }}"
+          loop_control:
+            label: "{{ item.container_name }}"
+
+        - name: Create the pre_run_commands task file on localhost
+          ansible.builtin.copy:
+            content: "{{ item.pre_run_commands | to_nice_yaml }}"
+            dest: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
+          loop: "{{ docker_services }}"
+          loop_control:
+            label: "{{ item.container_name }}"
+
+        - name: Create the post_run_commands task file on localhost
+          ansible.builtin.copy:
+            content: "{{ item.post_run_commands | to_nice_yaml }}"
+            dest: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml"
+          loop: "{{ docker_services }}"
+          loop_control:
+            label: "{{ item.container_name }}"
+
+        - name: Unescape all Jinja from each file as defined in jinja_unescape_paths
+          include_tasks: '{{ playbook_dir }}/core/unescape-jinja.yml'
+
+
+    - name: Deploy the valid and complete docker-compose file
+      ansible.builtin.template:
+        src: '{{ op_directory }}/ansible/extra_vars/{{ansible_ssh_host}}_docker-compose.yml'
+        dest: '/opt/container/docker-compose.yml'
+
+    - name: Authenticate to the container registry
+      shell: |
+        docker login {{ container_registry }} -u {{ container_registry_username }} -p {{ container_registry_password }}
+    
+    - name: Run the pre_run_commands for each container
+      ansible.builtin.include_tasks:
+        file: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
+      loop: "{{ docker_services }}"
+      loop_control:
+        label: "{{ item.container_name }}"
+
+    - name: Bring up all the containers (may take a while to pull back the container images)
+      shell: |
+        cd /opt/container && docker compose up -d
+
+    - name: Run the post_run_commands for each container
+      ansible.builtin.include_tasks:
+        file: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml"
+      loop: "{{ docker_services }}"
+      loop_control:
+        label: "{{ item.container_name }}"
+
+    - name: Set up the Firewall rules
+      include_tasks: "{{ playbook_dir }}/core/generate-firewall-rules-from-docker-compose.yml"
+      loop: "{{ docker_services }}"
+      loop_control:
+        loop_var: "service"
+        label: "{{ service.container_name }}"
+
+    - name: Enforce firewall rules
+      include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"

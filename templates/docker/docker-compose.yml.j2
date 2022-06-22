@@ -1,0 +1,23 @@
+services:
+{% for service in docker_services %}
+  {{ service.container_name }}:
+    container_name: {{ service.container_name }}
+    image: {{ service.image }}
+    command: "{{ service.command }}"
+    stdin_open: {{ service.stdin_open }}
+    tty: {{ service.tty }}
+    ports:
+{% for port in service.ports %}
+    - "{{ port }}"
+{% endfor %}
+
+{% if 'volumes' in service %}
+    volumes:
+{% for volume in service.volumes %}
+    - type: "{{ volume.type }}"
+      source: "{{ volume.source }}"
+      target: "{{ volume.target }}"
+{% endfor %}
+{% endif %}
+
+{% endfor %}

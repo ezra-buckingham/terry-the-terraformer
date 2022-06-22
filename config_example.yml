@@ -1,0 +1,56 @@
+################################ WARNING ################################
+# It is NOT recomended to place credentials/keys in this file!
+# To protect sensitive material, set your HISTCONTROL env var
+# to ensure that the command isn't stored in the shell history
+# and then use command line arguments to pass in creds.
+#########################################################################
+global:
+  project_directory: ./deployments
+  terraform_path:
+  ansible_path: 
+  nebula_path: 
+  nebula_subnet: 10.53.53.0/24
+  container_registry:
+  container_registry_username:
+  container_registry_password: 
+
+# ===================== Miscellaneous Configurations =====================
+ansible_configuration:
+  global:
+    # Email for SSL Cert Generation
+    main_email:
+  remote:
+    - name:
+      repo_url:
+      username:
+      personal_access_token:
+
+slack:
+  webhook_url:
+
+# ===================== Cloud Configurations =====================
+aws:
+  AWS_ACCESS_KEY_ID:
+  AWS_SECRET_ACCESS_KEY:
+  AWS_DEFAULT_REGION:
+
+azure:
+  ARM_CLIENT_CERTIFICATE_PASSWORD:
+  ARM_CLIENT_CERTIFICATE_PATH:
+
+digitalocean:
+  DIGITAL_OCEAN_TOKEN: 
+
+godaddy:
+  GODADDY_API_KEY:
+  GODADDY_API_SECRET:
+
+namecheap:
+  NAMECHEAP_USER_NAME:
+  NAMECHEAP_API_USER:
+  NAMECHEAP_API_KEY:
+
+# ===================== C2 Configurations =====================
+cobaltstrike:
+  COBALTSTRIKE_PASSWORD:
+  COBALTSTRIKE_MALLEABLE_C2:

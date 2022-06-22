@@ -1,0 +1,116 @@
+---
+- name: Setup the Redirector Server
+  hosts: redirector
+  become: true
+  vars:
+    ssl_configuration_location: /etc/apache2/sites-available/000-default-le-ssl.conf
+  tasks:  
+
+  - name: Logic for HTTP Redirector
+    when: redirector_type == 'https'
+    block:
+
+      - name: Allow all web traffic in the firewall
+        shell: |
+          ufw allow from any proto tcp to any port 80
+          ufw allow from any proto tcp to any port 443
+
+      - name: Install apache on the server
+        include_tasks: '{{ playbook_dir }}/install/install-apache.yml'
+
+      - name: Install Certbot
+        include_tasks: '{{ playbook_dir }}/install/install-certbot.yml'
+
+      - name: Generate SSL Certificates for the domains
+        include_tasks: '{{ playbook_dir }}/core/generate-ssl-certificates.yml'
+        loop: "{{ domain_map }}"
+        loop_control:
+          loop_var: domain
+
+      - name: Remove strict checking of SSL certificates
+        ansible.builtin.replace:  
+          path: /etc/letsencrypt/options-ssl-apache.conf
+          regexp: ^SSLOptions \+StrictRequire$
+          replace: '# Ansible Removed Strict Checking of SSL'
+
+      - name: Check for SSL redirection and proxy configurations already being set
+        shell: "grep 'Proxy C2 Traffic' {{ ssl_configuration_location }}"
+        register: proxy_set
+        check_mode: true
+        ignore_errors: true
+        changed_when: false
+
+      - name: Allow SSL redirection and proxy of C2 traffic (when not already set)
+        ansible.builtin.replace:
+          path: "{{ ssl_configuration_location }}"
+          regexp: ^<VirtualHost \*:443>$
+          replace: '<VirtualHost *:443>\n\t####### Proxy C2 Traffic #######\n\tSSLProxyEngine On\n\tSSLProxyVerify none\n\tSSLProxyCheckPeerCN off\n\tSSLProxyCheckPeerName off\n\tProxyPreserveHost On\n\tLogLevel alert rewrite:trace6\n\t##### End Proxy C2 Traffic #####\n'
+        # When no lines returned, that content is missing
+        when: proxy_set.stdout_lines | length == 0
+      
+      - name: Create the htaccess file for domain impersonation and redirection
+        copy:
+          dest: /var/www/html/.htaccess
+          content: |
+            RewriteEngine On
+            # Example Redirect Rule
+            # RewriteRule ^.*$ https://1.1.1.1:1111%{REQUEST_URI} [P]
+
+  - name: Logic for DNS Redirector
+    when: redirector_type == 'dns'
+    block:
+
+      - name: Allow all dns traffic in the firewall
+        shell: |
+          ufw allow from any proto udp to any port 53
+
+      - name: Install socat on the server
+        apt: 
+          name: socat
+          state: latest
+          update_cache: true
+
+      - name: Create the Socat folder (for holding socat scripts and configs)
+        ansible.builtin.file:
+          path: /opt/socat
+          state: directory
+
+      - name: Create the DNS redirector configuration file
+        ansible.builtin.copy:
+          dest: /opt/socat/dns-redirector.conf
+          content: |
+            1.1.1.1:153
+      
+      - name: Create the DNS redirector bash script
+        ansible.builtin.copy:
+          dest: /opt/socat/dns-redirector.sh
+          content: |
+            #!/bin/bash
+            /usr/bin/socat -T 5 udp4-listen:53,fork udp4:`cat /opt/socat/dns-redirector.conf`
+      
+      - name: Create the Service File for the DNS Redirector
+        ansible.builtin.copy: 
+          dest: /etc/systemd/system/dns-redirector.service
+          content: |
+            [Unit]
+            Description=Simple DNS Redirector using Socat
+
+            [Service]
+            Type=simple
+            User=root
+            StandardOutput=syslog
+            StandardError=syslog
+            WorkingDirectory=/opt/socat
+            ExecStart=/bin/bash dns-redirector.sh
+
+            [Install]
+            WantedBy=multi-user.target
+      
+      - name: Load the new service file and start the service
+        shell: |
+          systemctl daemon-reload && systemctl start dns-redirector.service
+
+
+  - name: Enforce firewall rules
+    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+

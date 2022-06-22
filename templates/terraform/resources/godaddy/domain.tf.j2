@@ -1,0 +1,11 @@
+
+resource "godaddy_domain_record" "record-{{ record.safe_subdomain }}_{{ root_domain }}" {
+  domain = "{{ root_domain }}"
+
+  record {
+    data = "{{ resource.terraform_resource_name }}.{{ resource.name }}.{{ resource.terraform_ip_reference }}"
+    name = "{{ record.subdomain }}"
+    port = 0
+    type = "{{ record.record_type }}"
+  }
+}
