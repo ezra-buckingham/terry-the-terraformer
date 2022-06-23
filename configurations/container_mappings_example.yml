@@ -1,0 +1,84 @@
+################################# Terry Docker Compose #################################
+
+# This is a standard Docker Compose file except for the presence of the "required_args",
+# "pre_run_commands", and "post_run_commands" which all MUST be blank if there is nothing to 
+# run / no required args. The "required_args" are the required arguments to run the container
+# If youvhave tasks you need to run, they should be VALID Ansible tasks and all Jinja templates
+# MUST be escaped with [[ ]] in order to work. 
+
+# NOTE: Jinja values that are NOT escaped are populated by Ansible at playbook init and if
+# there are undefined values, Ansible will throw an error
+
+########################################################################################
+
+services:
+  cobaltstrike:
+    container_name: cobaltstrike
+    image: <image_path>
+    command: "[[ ansible_ssh_host ]] [[ lookup('env', 'COBALTSTRIKE_PASSWORD') ]] /opt/cobaltstrike/mount/c2.profile"
+    stdin_open: false
+    tty: false
+    ports:
+      - "1111:50050/tcp"
+      - "1443:443/tcp"
+      - "180:80/tcp"
+      - "153:53/udp"
+    volumes:
+      - type: bind
+        source: /opt/container/cobaltstrike/mount
+        target: /opt/cobaltstrike/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+      - COBALTSTRIKE_PASSWORD
+      - COBALTSTRIKE_MALLEABLE_C2
+    pre_run_commands: 
+      - name: Copy over the Malleable C2 profile (when defined)
+        ansible.builtin.copy: 
+          # Must escape double quotes so Jinja template is populated
+          src: "[[ lookup('env', 'COBALTSTRIKE_MALLEABLE_C2') ]]"
+          dest: "/opt/container/cobaltstrike/mount/c2.profile"
+        when: "lookup('env', 'COBALTSTRIKE_MALLEABLE_C2') | length > 0"
+      - name: Create a dummy Malleable C2 profile (when not defined)
+        ansible.builtin.copy:
+          dest: "/opt/container/cobaltstrike/mount/c2.profile"
+          content: | 
+            set sample_name "Terry";
+            
+            http-get {
+              set uri "/itstheredteam";
+              client {
+                metadata {
+                  netbiosu;
+                  parameter "tmp";
+                }
+              }
+              server {
+                header "Content-Type" "application/octet-stream";
+                output {
+                  print;
+                }
+              }
+            }
+            
+            http-post {
+              set uri "/isittheredteam";
+              client {
+                header "Content-Type" "application/octet-stream";
+                id {
+                  uri-append;
+                }
+                output {
+                  print;
+                }
+              }
+              server {
+                header "Content-Type" "text/html";
+                output {
+                  print;
+                }
+              }
+            }
+        when: "lookup('env', 'COBALTSTRIKE_MALLEABLE_C2')| length <= 0"
+    post_run_commands: 
+
+ 
