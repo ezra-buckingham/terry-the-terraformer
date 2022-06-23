@@ -1,3 +1,4 @@
 deployments/*
 *.log
 config.yml
+.DS_Store

@@ -1,16 +1,18 @@
 # Terry the Terraformer
 
-Python script to build red team infrastructure using Terraform, Ansible, and Docker.
+Python CLI tool to to build red team infrastructure using Terraform, Ansible, and Docker. Once deployed, all resources can be integrated into a [Nebula](https://github.com/slackhq/nebula) network for secure communications across nodes.
 
-## Prerequisites
+## Documentation
 
-In order to use Terry, you must have the newest version of Terraform and Ansible installed. Then you must run:
+Most documentation can be found in the [Wiki](https://github.com/ezra-buckingham/terry-the-terraformer/wiki). If there is missing documentation or unclear documentation, please create an issue.
 
-```bash
-pip install -r requirements.txt
-```
+## Getting Started
+
+Getting started is relatively easy. Follow the [Getting Started](https://github.com/ezra-buckingham/terry-the-terraformer/wiki/Getting-Started) instructions to begin using Terry.
 
 ## Usage
+
+
 
 Terry was built to ensure a Red Team can deploy complex infrastructure in a cloud-agnostic way without needing to understand the intricacies of all the various tools like Ansible, Terraform, or Docker. The intended way to use Terry is to use the `terry.py` file, but since at the core Terry uses third-party / open source tools, an operator may choose to also use Terry just to create a terraform plan or just to run ansible playbooks (which can be run independently and documentation on how to do so is below).
 
