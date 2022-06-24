@@ -68,12 +68,12 @@
 
       - name: Deploy the Nebula client certificate
         ansible.builtin.copy:
-          src: "{{ op_directory }}/nebula/{{ uuid }}.crt"
+          src: "{{ op_directory }}/nebula/{{ name }}.crt"
           dest: "/opt/nebula/host.crt"
 
       - name: Deploy the Nebula client key
         ansible.builtin.copy:
-          src: "{{ op_directory }}/nebula/{{ uuid }}.key"
+          src: "{{ op_directory }}/nebula/{{ name }}.key"
           dest: "/opt/nebula/host.key"
 
       - name: Deploy the Nebula configuration

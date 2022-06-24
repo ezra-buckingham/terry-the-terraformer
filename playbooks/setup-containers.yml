@@ -90,7 +90,7 @@
 
     - name: Authenticate to the container registry
       shell: |
-        docker login {{ container_registry }} -u {{ container_registry_username }} -p {{ container_registry_password }}
+        docker login {{ lookup('env', 'CONTAINER_REGISTRY') }} -u {{  lookup('env', 'CONTAINER_REGISTRY_USERNAME') }} -p {{  lookup('env', 'CONTAINER_REGISTRY_PASSWORD') }}
     
     - name: Run the pre_run_commands for each container
       ansible.builtin.include_tasks:

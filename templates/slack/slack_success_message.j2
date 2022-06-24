@@ -11,19 +11,21 @@
 		{
 			"type": "divider"
 		},
-    {% for resource in resources %}
+    {% for resource in all_resources %}
 		{
 			"type": "header",
 			"text": {
 				"type": "plain_text",
-				{% if resource.type == 'categorize' %}
+				{% if resource.server_type == 'categorize' %}
 				"text": "🖥️  Categorization - {{ resource.name }}",
-				{% elif resource.type == 'teamserver' %}
+				{% elif resource.server_type == 'teamserver' %}
 				"text": "🕹️  Teamserver - {{ resource.name }}",
-				{% elif resource.type == 'redirector' %}
+				{% elif resource.server_type == 'redirector' %}
 				"text": "⏩  Redirector - {{ resource.name }}",
-				{% elif resource.type == 'bare' %}
+				{% elif resource.server_type == 'bare' %}
 				"text": "🗒️  Bare Server - {{ resource.name }}",
+				{% elif resource.server_type == 'lighthouse' %}
+				"text": "💡  Lighthouse Server - {{ resource.name }}",
 				{% endif %}
 				"emoji": true
 			}
@@ -36,42 +38,42 @@
 				{% for domain in resource.domain_map %}
 				{
 					"type": "mrkdwn",
-					"text": ">*Domain:* {{ domain.domain }} \n>*Registrar:* `{{ domain.registrar }}`\n>*Records*:{% for record in domain.domain_records %}\n> + *Subdomain (Record Type):* `{% if record.subdomain | length == 0 %}.{% else %}{{record.subdomain}}{% endif %} ({{record.record_type}})`{% endfor %}"
+					"text": ">*Domain:* {{ domain.domain }} \n>*Registrar:* `{{ domain.provider }}`\n>*Records*:{% for record in domain.domain_records %}\n> + *Subdomain (Record Type):* `{% if record.subdomain | length == 0 %}.{% else %}{{record.subdomain}}{% endif %} ({{record.record_type}})`{% endfor %}"
 				},
 				{% endfor %}
 				{% endif %}
 				{# End parsing for the domains section #}
 				{
 					"type": "mrkdwn",
-					"text": "*Provider:* `{{ resource.provider }}`\n*IPv4:* `{{ resource.public_ip }}`{% if resource.redirect_to %}\n*Redirection:* {{ resource.redirect_to }}{% endif %}"
+					"text": "*Provider:* `{{ resource.provider }}`\n*Nebula IPv4:* `{{ resource.nebula_ip }}` \n*IPv4:* `{{ resource.public_ip }}`{% if resource.redirect_to %}\n*Redirection:* {{ resource.redirect_to }}{% endif %}"
 				}
 			]
 		},
 		
 		{# Start parsing for the c2 section #}
-		{% if resource.c2_frameworks %}
+		{% if resource.containers %}
 		{
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "_*Installed Command and Control Software*_"
+				"text": "_*Installed Containers*_"
 			}
 		},
-		{% for c2 in resource.c2_frameworks.keys() %}
-		{% if c2 == 'cobaltstrike' %}
+		{% for container in resource.containers %}
+		{% if container.name == 'cobaltstrike' %}
 		{
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": ">CobaltStrike: `{{ resource.public_ip }}:1111`"
+				"text": ">CobaltStrike"
 			}
 		},
-		{% elif c2 == 'deimos' %}
+		{% elif container.name == 'deimos' %}
 		{
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": ">Deimos: `{{ resource.public_ip }}:2222`"
+				"text": ">Deimos"
 			},
 			"accessory": {
 				"type": "button",
@@ -86,12 +88,20 @@
 				"action_id": "deimos-link"
 			}
 		},
-		{% elif c2 == 'sliver' %}
+		{% elif container.name == 'sliver' %}
 		{
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": ">Sliver: `{{ resource.public_ip }}:3333` (configs at `{{ resource.public_ip }}:/opt/sliver/mount`)"
+				"text": ">Sliver: configs at `{{ resource.public_ip }}:/opt/sliver/mount/<username>.conf`"
+			}
+		},
+		{% else %}
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ">{{ container.name }}"
 			}
 		},
 		{% endif %}

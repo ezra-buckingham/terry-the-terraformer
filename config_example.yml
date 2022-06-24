@@ -2,14 +2,14 @@
 # It is NOT recomended to place credentials/keys in this file!
 # To protect sensitive material, set your HISTCONTROL env var
 # to ensure that the command isn't stored in the shell history
-# and then use command line arguments to pass in creds.
+# and then use the export command to pass in creds thorugh env vars.
 #########################################################################
 global:
   project_directory: ./deployments
   terraform_path:
   ansible_path: 
   nebula_path: 
-  nebula_subnet: 10.53.53.0/24
+  nebula_subnet: 10.36.36.0/24
   container_registry:
   container_registry_username:
   container_registry_password: 

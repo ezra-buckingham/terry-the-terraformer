@@ -457,11 +457,9 @@ def build_resource_domain_map(protocol, domain):
         existing_record = domain.domain_records.pop()
         modified_records =  [
             DomainRecord(domain.provider, 'ns1', 'A'),
-            DomainRecord(domain.provider, 'ns2', 'A'),
             DomainRecord(domain.provider, existing_record.subdomain, 'NS')
         ]
         domain.domain_records += modified_records
-
 
     return domain
 

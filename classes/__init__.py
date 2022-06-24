@@ -191,7 +191,6 @@ class Container(AnsibleControlledObject):
     name: str
     # Default Values
     required_args = {}
-    redirector_ip: str = None
     container_config = {}
 
     def __post_init__(self):
@@ -208,7 +207,6 @@ class Container(AnsibleControlledObject):
         # Set the core ansible vars
         self.core_playbook_vars = {
             'name': self.name,
-            'redirector_ip': self.redirector_ip,
             **self.required_args
         }
 

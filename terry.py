@@ -12,7 +12,6 @@ import utils
 from classes import *
 
 
-
 def build_infrastructure(ctx_obj):
     """This is the main body.
     After click is complete, come here and work through the other steps.
@@ -21,6 +20,11 @@ def build_infrastructure(ctx_obj):
     """
 
     operation_name = ctx_obj["operation"]
+
+    # Check for project directory
+    if not ctx_obj['project_directory'].exists():
+        utils.log_warn('Project directory not found, creating that now...')
+        ctx_obj['project_directory'].mkdir()
 
     # Check for certificates directory
     if not ctx_obj['certificates_directory'].exists():
@@ -132,9 +136,19 @@ def build_infrastructure(ctx_obj):
     if not ctx_obj['no_nebula']:
         utils.log_info('Setting up Nebula configurations and certificates')
         nebula_handler = NebulaHandler(ctx_obj['binaries']['nebula'].path, ctx_obj['nebula_subnet'], ctx_obj['op_directory'])
-        nebula_handler.generate_ca_certs()
+        # Check if we have a root cert yet
+        if ctx_obj['op_directory'].joinpath('nebula/ca.crt').exists():
+            utils.log_info('Nebula root certificate found, skipping generating new certificate')
+        else:
+            nebula_handler.generate_ca_certs()
         for resource in ctx_obj['all_resources']:
-            assigned_nebula_ip = nebula_handler.generate_client_cert(resource.uuid)
+            # Check if we have a host certificate, if so, delete it
+            if ctx_obj['op_directory'].joinpath(f'nebula/{resource.name}.crt').exists():
+                utils.log_info(f'Nebula host certificate found for "{resource.name}", deleting existing and generating new certificate key pair')
+                ctx_obj['op_directory'].joinpath(f'nebula/{resource.name}.crt').unlink()
+                ctx_obj['op_directory'].joinpath(f'nebula/{resource.name}.key').unlink()
+            # Generate the new certificate
+            assigned_nebula_ip = nebula_handler.generate_client_cert(resource.name)
             resource.nebula_ip = assigned_nebula_ip
             # Assign the lighthouse values so they can go into the config
             if isinstance(resource, Lighthouse):
@@ -145,7 +159,7 @@ def build_infrastructure(ctx_obj):
 
     # Create the pickle file for the built resources
     utils.log_debug('Building a pickle of the current resources and Ansible inventory')
-    utils.build_resource_pickle(ctx_obj)    
+    #utils.build_resource_pickle(ctx_obj)    
     utils.build_ansible_inventory(ctx_obj)
 
     # Configure Ansible
@@ -174,6 +188,7 @@ def build_infrastructure(ctx_obj):
 
     utils.log_info('Script complete! Enjoy the tools you tool!')
 
+
 @click.pass_context
 def validate_build_request(ctx):
     """Validates the build and accessibility to required binaries to run"""
@@ -190,6 +205,16 @@ def validate_build_request(ctx):
     if len([ x for x in ctx.obj["all_resources"] if isinstance(x, Categorize) ]) >= 1 and len(ctx.obj["resources"]) > 1:
         utils.log_error(f'Ensure the categorization server is the only resource being made in a single deployment')
 
+    # Validate that we have credentials to login to a container registry, only if we have containers defined
+    for resource in ctx.obj['all_resources']:
+        if hasattr(resource, 'containers') and len(resource.containers) > 0: 
+            utils.log_debug('Containers found in build, checking for container registry credentials now')
+            # First Validate we were given registry creds
+            utils.check_for_required_value(ctx.obj, 'container_registry')
+            utils.check_for_required_value(ctx.obj, 'container_registry_username')
+            utils.check_for_required_value(ctx.obj, 'container_registry_password')
+            break
+        
     # If using Nebula, check we have everything needed for the build
     lighthouses = [ x for x in ctx.obj["all_resources"] if isinstance(x, Lighthouse) ]
     # Check if we want to build nebula and if destory is not the command
@@ -202,7 +227,7 @@ def validate_build_request(ctx):
             utils.log_warn('Nebula configured for this build, but no Lighthouses found. Either use the "-N" / "--no_nebula" flag or I can build one for you now.')
             response = utils.log_confirmation('Would you like me to add a Lighthouse to the current build?')
             if response:
-                lighthouse_name = ctx.obj['safe_operation_name'] + '-' + 'lighthouse' + (str([x.server_type for x in ctx.obj['resources']].count(type) + 1))
+                lighthouse_name = create_resource_name('lighthouse')
 
                 # Now get the provider from the user
                 provider = utils.log_get_input('What provider do you want the build the lighthouse with?')
@@ -222,10 +247,13 @@ def validate_build_request(ctx):
     
 
     # Check if we said to have no nebula, but manually built a lighthouse
-    if not ctx.obj['no_nebula'] and len(lighthouses) > 0:
-        utils.log_warn('Building without Nebula, but found a Lighthouse in the build, building it anyway')
+    if ctx.obj['no_nebula'] and len(lighthouses) > 0:
+        utils.log_warn('Lighthouse found in build along with "-N / --no_nebula"')
+        response = utils.log_confirmation('Did you want to use Nebula for this build?')
+        if response:
+            ctx.obj['no_nebula'] = not ctx.obj['no_nebula']
 
-
+    
     # Validate the resources being built
     for resource in ctx.obj['all_resources']:
 
@@ -243,8 +271,11 @@ def validate_build_request(ctx):
 
 
     utils.log_debug('Build looks good! Terry, take it away!')
-    
-    
+
+@click.pass_context
+def create_resource_name(ctx, type):
+    return type + (str([x.server_type for x in ctx.obj['all_resources']].count(type) + 1))
+
 
 @click.group(chain=True, context_settings=dict(help_option_names=['-h', '--help', '--how-use', '--freaking-help-plz', '--stupid-terry']))
 @click.option('-c', '--config', default="config.yml", type=click.Path(exists=True), help='''
@@ -411,7 +442,7 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
     """Create a server resource"""
 
     # The name is operationname_lighthouseN, where N is number of existing redirectors + 1 and it must be unique across all deployments since some APIs will error out if they aren't unique (even in different deployments)
-    name = type + (str([x.server_type for x in ctx.obj['resources']].count(type) + 1))
+    name = create_resource_name(type)
     resources = []
 
     # Build the redirector objects
@@ -431,7 +462,7 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
             utils.log_error(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {utils.get_implemented_providers(simple_list=True)}')
 
         proto = redirector_definition[1]
-        redirector_name = f'{name}-{proto}-redirector'
+        redirector_name = f'{name}-{proto}-{create_resource_name("redir")}'
         
         # Check if protocol supported as given by the user
         if proto not in utils.get_implemented_redirectors():
@@ -476,6 +507,8 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
         server = Categorize(name, provider, domain_map, redirect_to)
     elif type == 'bare':
         server = Bare(name, provider, domain_map, containers)
+    elif type == 'lighthouse':
+        server = Lighthouse(name, provider, domain_map)
     else:
         utils.log_error(f'Got unknown server type: "{type}"')
 

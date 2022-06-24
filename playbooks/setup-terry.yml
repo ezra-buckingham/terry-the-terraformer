@@ -1,0 +1,15 @@
+---
+- name: Setup this server to use Terry
+  gather_facts: true
+  hosts: localhost
+  become: true
+  tasks:
+
+  - name: Install all requirements with pip3
+    shell: | 
+      pip3 install -r {{ playbook_dir }}/../requrements.txt
+  
+  - name: Install Nebula
+    import_tasks: "{{ playbook_dir }}/install/install-nebula.yml"
+      
+  

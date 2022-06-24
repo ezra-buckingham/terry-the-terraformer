@@ -324,6 +324,9 @@ class EnvironmentVariableHandler:
     name: str
     __value: str = None
 
+    def __post_init__(self):
+        self.name = self.name.upper()
+
     def get(self):
         if not self.__value: 
             self.__value= os.getenv(self.name)
