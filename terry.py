@@ -411,7 +411,7 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
     """Create a server resource"""
 
     # The name is operationname_lighthouseN, where N is number of existing redirectors + 1 and it must be unique across all deployments since some APIs will error out if they aren't unique (even in different deployments)
-    name = ctx.obj['safe_operation_name'] + '-' + type + (str([x.server_type for x in ctx.obj['resources']].count(type) + 1))
+    name = type + (str([x.server_type for x in ctx.obj['resources']].count(type) + 1))
     resources = []
 
     # Build the redirector objects

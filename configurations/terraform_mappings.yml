@@ -55,6 +55,15 @@ digitalocean:
         categorize: 32
         bare: 64
 
+############## ProxMox ############
+proxmox:
+  provider: 
+    source: "Telmate/proxmox"
+    version: "2.9.10"
+    default_arguments:
+      - PM_USER
+      - PM_PASS
+
 ############ NameCheap ############
 namecheap:
   provider:

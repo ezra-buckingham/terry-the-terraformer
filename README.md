@@ -1,8 +1,9 @@
-# Terry the Terraformer
 
 <p align="center">
   <img src="logos/terry_logo_basic_1000x1090_bg.png" width="350" title="Terry Logo">
 </p>
+
+# Terry the Terraformer
 
 Python CLI tool to to build red team infrastructure using Terraform, Ansible, and Docker. Once deployed, all resources can be integrated into a [Nebula](https://github.com/slackhq/nebula) network for secure communications across nodes.
 

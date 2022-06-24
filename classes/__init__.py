@@ -148,6 +148,10 @@ class AnsibleControlledObject:
         if isinstance(self, Lighthouse):
             self_dict['am_lighthouse'] = True
 
+        # Check for name
+        if hasattr(self, 'name') and self.name is not None:
+            self_dict['name'] = self.name
+
         # Check for a nebula ip
         if hasattr(self, 'nebula_ip') and self.nebula_ip is not None:
             self_dict['nebula_ip'] = self.nebula_ip

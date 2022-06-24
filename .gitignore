@@ -2,3 +2,5 @@ deployments/*
 *.log
 config.yml
 .DS_Store
+conainter_mappings.yml
+terraform_mappings.yml

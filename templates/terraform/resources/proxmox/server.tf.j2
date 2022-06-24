@@ -1,0 +1,12 @@
+resource "proxmox_vm_qemu" "{{ name }}" {
+  name = ""
+  target_node = ""
+  iso = ""
+  agent = 1
+
+  clone = ""
+  full_clone = true
+  memory = "{{ terraform_size_reference }}"
+  vcpus = "{{ terraform_size_reference }}"
+  tags = "{{ operation }}"
+}

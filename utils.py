@@ -369,7 +369,6 @@ def build_ansible_inventory(ctx_obj):
     try:
         # Create the Global Vars to pass to ansbible
         global_vars = ctx_obj["ansible_configuration"]["global"]
-        # global_vars += ctx_obj["ansible_configuration"]["global"]
         global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
         global_vars["nebula"] = not ctx_obj['no_nebula']
         # If installing Nebula, give the addittional vars needed for configuring it on the hosts

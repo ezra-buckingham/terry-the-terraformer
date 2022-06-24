@@ -10,6 +10,10 @@
       name: admin
       state: present
 
+  - name: Set the hostname of the server to be the resource name
+    shell: |
+      hostnamectl set-hostname {{ name }}
+
   - name: Add the team as users to server
     ansible.builtin.user:
       name: "{{ item.value.user }}"

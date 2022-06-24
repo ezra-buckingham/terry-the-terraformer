@@ -1,7 +1,7 @@
 # Create the Volume
-resource "digitalocean_volume" "volume-{{ name }}" {
+resource "digitalocean_volume" "volume-{{safe_operation_name}}-{{ name }}" {
   region = "nyc3"
-  name = "volume-{{ name }}"
+  name = "volume-{{safe_operation_name}}-{{ name }}"
   size = {{ terraform_disk_size_reference }}
   initial_filesystem_type = "ext4"
   description = "Disk volume for {{ name }}"
@@ -19,5 +19,5 @@ resource "digitalocean_droplet" "{{ name }}" { # Value provided by Jinja
 # Attach the Volume
 resource "digitalocean_volume_attachment" "volume-attachment-{{ name }}" {
   droplet_id = digitalocean_droplet.{{ name }}.id
-  volume_id = digitalocean_volume.volume-{{ name }}.id
+  volume_id = digitalocean_volume.volume-{{{{safe_operation_name}}}}-{{ name }}.id
 }
