@@ -21,14 +21,16 @@ Although I am the only named contributor on this project (as of now), I want to 
 
 And not to mention all the people in BloodHound slack that I pestered for getting feedback on this solution. Thank you!
 
-## Known Limitations / Issues
+## Known Issues
 
-There are known issues / quirks to Terry. Here are some of the ones I have identified:
+There are known issues to Terry. Here are some of the ones I have identified:
 
-* Logging errors will NOT print the stack trace
-* No central managment of wildcard Certs
-* UFW rules to containers must run both `ufw allow` and `ufw route allow` to allow ufw to manage the docker routes
+* Logging errors to the log file will won't print the stack trace
+* No central managment of wildcard certs (wildcard cert generation likely coming in the future)
+* PTR records need to be determined before SMTP will work
+  * DigitalOcean will create PTR records from the name of the host, need to make sure name of host is the FQDN
 
 ## What's next?
 
 * Adding a secrets management solution to Terry to allow for dynamic generation of secrets and automatic pushing of secrets to a secure place
+* Timeout date on infra (auto-destroy)
