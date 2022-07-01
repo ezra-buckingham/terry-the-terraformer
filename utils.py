@@ -1,103 +1,14 @@
 import pickle
 from datetime import datetime
-from xml import dom
-import click
 from pathlib import Path
-import subprocess
 import random
 import yaml
-import os
 from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend as crypto_default_backend
 
-from classes import *
-from handlers import *
 
-
-
-logger = logging.getLogger('main')
-verbose_logging = False
-
-def log_confirmation(message):
-    """Prompts the user for confirmation
-
-    Args:
-        `message (str)`: Message / Question to ask user
-    Returns:
-        `result (bool)`: Result of the confirmation
-    """
-
-    result = click.confirm(f'[?] {message}')
-    return result
-
-
-def log_get_input(message):
-    """Prompts the user for input
-
-    Args:
-        `message (str)`: Message / Prompt to ask user
-    Returns:
-        `result (str)`: Result from the user
-    """
-
-    result = click.prompt(f'[?] {message}')
-    return result
-
-def log_debug(message):
-    """Logs an debug message to stdout and log file
-
-    Args:
-        `message (str)`: Message to log
-    Returns:
-        `None`
-    """
-
-    logger.debug(message)
-    if verbose_logging:
-        click.secho(f'[*] {message}', fg='blue')
-
-def log_info(message):
-    """Logs an info message to stdout and log file
-
-    Args:
-        `message (str)`: Message to log
-    Returns:
-        `None`
-    """
-
-    logger.info(message)
-    click.secho(f'[+] {message}', fg='green')
-
-
-def log_warn(message):
-    """Log a warn message to stdout and log file
-
-    Args:
-        `message (str)`: Message to log
-    Returns:
-        `None`
-    """
-
-    logger.warn(message)
-    click.secho(f'[!] {message}', fg='yellow')
-
-
-def log_error(message, is_fatal=True):
-    """Log an error message to stdout and log file
-    
-    Args:
-        `message (str)`: Message to log
-        `is_fatal (bool)`: Is the error fatal enough to exit (Default is `True`)
-    Returns:
-        `None`
-    """
-
-    logger.error(message)
-    click.secho(f'[x] {message}', fg='red', bold=True)
-    if is_fatal: 
-        click.secho(f'[x] Error was fatal, exiting...', fg='red', bold=True)
-        exit(code=1)
+from core import *
 
 
 def get_formatted_time():
@@ -106,48 +17,13 @@ def get_formatted_time():
     Args:
         `None`
     Returns:
-        `None`
+        `time (str)`: The local time in "%H:%M:%S" format
     """
 
-    # Need to pad the value so that we get a 2 digit hour, min, and sec
-    def pad_value(value):
-        if value < 10: return f'0{value}'
-        else: return value
-
-    datetime_obj = datetime.now()
-    time_obj = datetime_obj.time()
-    time = f'{pad_value(time_obj.hour)}:{pad_value(time_obj.minute)}:{pad_value(time_obj.second)}'
+    now = datetime.now()
+    time = now.strftime("%H:%M:%S")
     return time
 
-def make_system_call(command, working_directory=None):
-    """Makes a system call using the subprocess module
-
-    Args: 
-        `command (str)`: Shell command
-    Returns:
-        `None`
-    """
-    global verbose_logging
-
-    # If there is verbose logging, print out
-    stdout = subprocess.DEVNULL
-    if verbose_logging:
-        stdout = subprocess.PIPE
-
-    # If we have a working directory, change to it
-    cwd = os.getcwd()
-    if working_directory:
-        os.chdir(working_directory)
-
-    # Run the command, catch the error so that we can still change directory, and then raise that error back up
-    try:
-        output = subprocess.run(command.split(' '), check=True, stdout=stdout, stderr=stdout)
-    except subprocess.CalledProcessError as e:
-        os.chdir(cwd)
-        raise e
-
-    # Change back the OG directory
-    os.chdir(cwd)
 
 def find_dict_item(obj, key):
     """Recursively search a dictionary for a specific key name
@@ -158,6 +34,7 @@ def find_dict_item(obj, key):
     Returns:
         `value (obj)`: Value of the found key or None if not found
     """
+    
     value = obj.get(key.lower(), obj.get(key.upper(), None))
     if value: return value
     for dict_key, dict_value in obj.items():
@@ -165,6 +42,7 @@ def find_dict_item(obj, key):
             item = find_dict_item(dict_value, key) 
             if item is not None:
                 return item
+
 
 def check_for_required_value(ctx_obj, value_name):
     """Will check for a specific value being an environment variable, then check the cli, then check the config file.
@@ -183,32 +61,32 @@ def check_for_required_value(ctx_obj, value_name):
     # First, check the command line for the argument needed for the provider
     cli_value = ctx_obj.get(value_name.lower(), None)
     if cli_value:
-        log_debug(f'{value_name}: Value FOUND in CLI arguments')
+        LogHandler.debug(f'{value_name}: Value FOUND in CLI arguments')
         required_value.set(value_name, cli_value)
         return required_value
     else:
-        log_debug(f'{value_name}: Value NOT FOUND in CLI arguments')
+        LogHandler.debug(f'{value_name}: Value NOT FOUND in CLI arguments')
 
     # Second, check the env variable in case it was set manually
     if required_value.get(): 
-        log_debug(f'{value_name}: Value FOUND in envionment variables')
+        LogHandler.debug(f'{value_name}: Value FOUND in envionment variables')
         return required_value
     else: 
-        log_debug(f'{value_name}: Value NOT FOUND in envionment variables')
+        LogHandler.debug(f'{value_name}: Value NOT FOUND in envionment variables')
                 
     # Third, check the config file for the argument needed for the provider
     config_values = ctx_obj.get('config_values', {})
     config_value = find_dict_item(config_values, value_name)
     if config_value:
-        log_debug(f'{value_name}: Value FOUND in config file')
+        LogHandler.debug(f'{value_name}: Value FOUND in config file')
         required_value.set(config_value)
         return required_value
     else:
-        log_debug(f'{value_name}: Value NOT FOUND in config file')
+        LogHandler.debug(f'{value_name}: Value NOT FOUND in config file')
                 
     # Lastly, prompt the user to give us the creds if not found
     if not required_value.get():
-        returned_value = log_get_input(f'Enter the {value_name}')
+        returned_value = LogHandler.get_input(f'Enter the {value_name}')
         required_value.set(returned_value)
         return returned_value
 
@@ -230,6 +108,7 @@ def remove_directory_recursively(path):
             remove_directory_recursively(child)
     path.rmdir()
 
+
 def get_files_from_directory(dir):
     """Gets all files in a specified directory
 
@@ -245,6 +124,7 @@ def get_files_from_directory(dir):
 
     return files
 
+
 def get_implemented_server_types():
     """Gets the types of server types that can be deployed
 
@@ -256,6 +136,7 @@ def get_implemented_server_types():
 
     server_types = ['bare', 'categorize', 'teamserver', 'lighthouse', 'redirector']
     return server_types
+
 
 def get_implemented_providers(simple_list=False, is_registrar=False):
     """Gets the list of provider files in the 'templates/terraform/providers' directory
@@ -273,6 +154,7 @@ def get_implemented_providers(simple_list=False, is_registrar=False):
 
     return implemented_providers
 
+
 def get_implemented_containers():
     """Get the list of containers as defined in the 'container_mappings.yml' file
 
@@ -283,6 +165,7 @@ def get_implemented_containers():
     """
 
     return get_container_mappings(True)
+
 
 def get_implemented_redirectors():
     """Gets the list of redirectors as we have them implemented (these are implemented in Ansible)
@@ -295,6 +178,7 @@ def get_implemented_redirectors():
 
     redirector_types = ['https', 'dns', 'custom']
     return redirector_types
+
 
 def get_container_mappings(simple_list=True):
     """Get the Container Mapping configuration file that will be used to build and deploy docker containers
@@ -314,6 +198,7 @@ def get_container_mappings(simple_list=True):
 
         return parsed_yaml 
 
+
 def get_terraform_mappings():
     """Get the Terraform Mapping configuration file that will be used to build and remediate differences across the various providers
     
@@ -329,31 +214,6 @@ def get_terraform_mappings():
     
     return parsed_yaml
 
-def prepare_providers(ctx_obj):
-    """Prepares providers by ensuring required credential material is available based on providers selected for a given resource.
-    The order of precedence in retreiving the credentials is command line, environment variable, configuration file.
-    The program shouldn't continue until all credentials are found in one of sources listed above.
-
-    Args:
-        `ctx_obj (Click Context Object)`: the click context object
-    Returns:
-        `providers (list[Provider])`: The list of providers
-    """
-
-    providers = []
-
-    for provider in ctx_obj['required_providers']:
-        provider_name = list(provider.keys())[0]
-        provider_arguments = provider[provider_name]['provider']
-
-        # Loop over the default_arguments to see if we have what we need for the provider
-        for argument_key in provider_arguments['default_arguments']:
-            credential_env_var = check_for_required_value(ctx_obj, argument_key)
-        
-        providers.append(Provider(provider_name, provider_arguments['source'], provider_arguments['version']))
-
-    return providers
-
 
 def build_ansible_inventory(ctx_obj):
     # We want to build a file so that ansible could be independently run outside of terry
@@ -367,14 +227,18 @@ def build_ansible_inventory(ctx_obj):
         
     # Ansible will lock this file at times, so we need to try to write the changes, but may not be able to
     try:
-        # Create the Global Vars to pass to ansbible
+        # Create the Global Vars to pass to ansible
         global_vars = ctx_obj["ansible_configuration"]["global"]
         global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
         global_vars["nebula"] = not ctx_obj['no_nebula']
-        # If installing Nebula, give the addittional vars needed for configuring it on the hosts
+        # If installing Nebula, give the additional vars needed for configuring it on the hosts
         if global_vars["nebula"]:
             global_vars["lighthouse_public_ip"] = ctx_obj['lighthouse_public_ip']
             global_vars["lighthouse_nebula_ip"] = ctx_obj['lighthouse_nebula_ip']
+
+        # Give Ansible the default users from the configuration file
+        default_users = ctx_obj["ansible_configuration"]["default_users"]
+        global_vars['team'] = default_users
 
         # Check if we have extra_vars to put into the inventory
         path_to_extra_vars = ctx_obj["op_directory"].joinpath('ansible/extra_vars')
@@ -394,7 +258,7 @@ def build_ansible_inventory(ctx_obj):
         yaml_text = yaml.safe_dump(ansible_inventory)
         ctx_obj['op_directory'].joinpath('ansible/inventory/hosts').write_text(yaml_text)
     except PermissionError as e:
-        log_warn('There was a "PermissionError" while writing the Ansible inventory file')
+        LogHandler.warn('There was a "PermissionError" while writing the Ansible inventory file')
     
     return inventory
 
@@ -405,11 +269,13 @@ def map_values(ctx_obj, json_data):
     Returns nothing (updates resource classes in place).
     """
 
+    LogHandler.debug('Mapping Terraform state')
+
     # Sort both lists by name to ensure same order
     terraform_resources = sorted(json_data, key=lambda x: x['name']) 
 
     # Get the terraform mappings so we know what keys to search for
-    terraform_mappings = utils.get_terraform_mappings()
+    terraform_mappings = get_terraform_mappings()
 
     for resource in terraform_resources:
         resource_values = resource['values']
@@ -450,8 +316,8 @@ def build_resource_domain_map(protocol, domain):
         `domain (Domain)`: Domain object in which to map records to
     """
 
-    if protocol not in utils.get_implemented_redirectors():
-        utils.log_error(f'Invalid redirector type provided: "{protocol}". Please use one of the implemented redirectors: {utils.get_implemented_redirectors()}')
+    if protocol not in get_implemented_redirectors():
+        LogHandler.critical(f'Invalid redirector type provided: "{protocol}". Please use one of the implemented redirectors: {get_implemented_redirectors()}')
 
     if protocol == 'dns':
         existing_record = domain.domain_records.pop()
@@ -505,7 +371,7 @@ def build_plan(ctx_obj):
                 hosted_zone = f'{registrar.domain}:{registrar.provider}'
                 # If hosted zone already exists
                 if hosted_zone in hosted_zones:
-                    log_debug(f'Hosted domain zone for {hosted_zone} already built, only building single zone.')
+                    LogHandler.debug(f'Hosted domain zone for {hosted_zone} already built, only building single zone.')
                 else:
                     jinja_vars = registrar.__dict__
                     plan += jinja_handler.get_and_render_template(registrar.terraform_resource_path, jinja_vars) + '\n\n'

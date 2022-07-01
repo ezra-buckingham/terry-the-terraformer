@@ -19,6 +19,12 @@ ansible_configuration:
   global:
     # Email for SSL Cert Generation
     main_email:
+  # Default users for all systems
+  default_users:
+    terry:
+      user: terry
+      public_ip: 8.8.8.8
+      public_key: 
   remote:
     - name:
       repo_url:

@@ -1,125 +1,73 @@
 from dataclasses import dataclass
-import json
+from hashlib import sha256
 from pathlib import Path
-from shutil import which
-import uuid
-import utils
+
+import yaml
+
+from core.log_handler import LogHandler
 
 
-#################################################################################################################
-# Core & Miscellaneous
-#################################################################################################################
-
-@dataclass 
-class BinaryExecutable:
-    """Class to represent binaries that may be required for Terry to run"""
-    name: str
-    path: object
-
-    def __post_init__(self):
-        base_message = f'Binary Executable Error: "{self.name}"'
-
-        # Check if it is already in the path
-        path_to_binary = which(self.name)
-
-        # Check if a path was given in config and if it doesn't exist
-        if self.path and len(self.path) > 0:
-            utils.log_debug(f'Path provided for the "{self.name}" binary, checking to ensure it exists')
-            if not Path(self.path).exists():
-                utils.log_error(f'{base_message} provided path "{self.path}" does not exist', True)
-        # If not, check to see if it is in the PATH
-        else:
-            utils.log_debug(f'Path not provided for "{self.name}" binary, checking if it exists in current PATH')
-            if not path_to_binary:
-                utils.log_error(f'{base_message} unable to find "{self.name}" binary in your path; Please make sure it is in your path or the path is provided in the config file', True)
-
-        # If we make it here, we were successfull in finding the binary
-        utils.log_debug(f'Succesfully found "{self.name}" binary')
-
-@dataclass
-class RemoteConfiguration:
-    """Class to represent a remote configuration that may can be loaded by Terry"""
-
-    configuration_name: str 
-    repository_url: str
-    username: str
-    personal_access_token: str
-    # Default
-    repo_uuid = uuid.uuid4()
-    repo_folder_on_disk : Path = Path('/tmp')
-    git_executable_path : str = ''
-    configuration = dict()
-
-
-    def __post_init__(self):
-        base_message = f'Remote Configuration Error:'
-
-        # Generate path to where we will clone the repo
-        self.repo_folder_on_disk = self.repo_folder_on_disk.joinpath(str(self.repo_uuid))
-
-        # Check if we have Git installed
-        self.git_executable_path = BinaryExecutable('git', self.git_executable_path)
-
-        # TODO Check if we were given a valid git repo URL
-
-        try:
-            utils.log_debug(f'Attempting to clone "{self.repository_url}" to "{self.repo_folder_on_disk}" using username "{self.username}"')
-            self.__clone_repo()
-            utils.log_debug(f'Clone of "{self.repository_url}" successfully written to "{self.repo_folder_on_disk}"')
-        except Exception as e:
-            utils.log_error(f'{base_message} There was an error cloning "{self.repository_url}" using provided credentials. Please make sure you have the right URL and credentials.') 
-
-        # Now let's loop over what we got back from the remote
-        try:
-            utils.log_debug(f'Attempting to parse the contents of "{self.repo_folder_on_disk}"')
-            self.__parse_contents()
-            utils.log_debug(f'Parsing of "{self.repo_folder_on_disk}" was successful')
-        except Exception as e:
-            utils.log_error(f'{base_message} There was an error parsing the contents of "{self.repository_url}". Please make sure the contents are actual configuration files.') 
-            
-
-    def __clone_repo(self):
-        # Create the command
-        command = f"git clone https://{self.username}:{self.personal_access_token}@{self.repository_url} {self.repo_folder_on_disk}"
-
-        # Use the system call to call git
-        utils.make_system_call(command)
-
-
-    def __parse_contents(self):
-        # Get all JSON files from the cloned repo
-        utils.log_debug(f'Pulling json files out of "{self.repo_folder_on_disk}"')
-        json_files = list(self.repo_folder_on_disk.glob('**/*.json'))
-
-        self.configuration = { self.configuration_name: {}}
-
-        # Loop over the json_files, parse them and place them into the dict
-        for file in json_files:
-            utils.log_debug(f'Parsing "{file}"')
-
-            # Open the file, parse it, and then append to the dict
-            with file.open() as open_file:
-                file_contents = open_file.read()
-                json_contents = json.loads(file_contents)
-                self.configuration[self.configuration_name][file.stem] = json_contents
+BUILD_UUID = ''
 
 
 #################################################################################################################
 # Parent Terraform, Ansible, & Container Classes
 #################################################################################################################
 
+class YAMLSerializable:
+    """Base class for representing a YAML serializable object"""
+
+    def __init__(self):
+        self.uuid = ''
+
+    def __hacked_hash__(self, build_uuid):
+        """A hacked together implementation of the __hash__ function"""
+        self.build_uuid = build_uuid
+        self_yaml = self.to_yaml()
+        self_yaml = self_yaml.encode('utf-8')
+        self_sha256 = sha256(self_yaml).hexdigest()
+
+        self.uuid = self_sha256
+        return self_sha256
+
+    def to_yaml(self):
+        """Convert the object to YAML"""
+        self_dict = self.to_dict()
+        return yaml.safe_dump(self_dict)
+
+    def to_dict(self):
+        """Convert the object to a dict"""
+
+        def check_unserializable_obj(obj):
+            """Check if the object is unserializable"""
+            if isinstance(obj, Path):
+                return str(value.absolute())
+            elif isinstance(obj, YAMLSerializable):
+                return obj.to_dict()
+            return value
+    
+        self_dict = vars(self)
+        for key, value in self_dict.items():
+            # If a list, loop over the list, checking each element if it is unserializable
+            if isinstance(value, list):
+                for sub_value in value:
+                    sub_value = check_unserializable_obj(sub_value)
+            self_dict[key] = check_unserializable_obj(value)
+        
+        return self_dict
+
+
 @dataclass 
-class TerraformObject:
+class TerraformObject(YAMLSerializable):
     """Base class for all things Terraform"""
 
     provider: str
     infrastructure_type: str
     terraform_resource_path: object = None
     error_on_missing_resource_file: bool = True
-    uuid: str = None
 
     def __post_init__(self):
-        self.uuid = str(uuid.uuid4())
+        YAMLSerializable.__init__(self)
 
         inferred_path = f'./templates/terraform/resources/{self.provider}/{self.infrastructure_type}.tf.j2'
         path = Path(inferred_path)
@@ -129,9 +77,11 @@ class TerraformObject:
             raise FileNotFoundError(f'File not found at {inferred_path}')
 
 
-@dataclass
-class AnsibleControlledObject:
+class AnsibleControlledObject(YAMLSerializable):
     """Base class for representing an Ansible Controlled Resource"""
+
+    def __init__(self):
+        YAMLSerializable.__init__(self)
 
     def prepare_object_for_ansible(self):
         """Take the Child AnsibleControlled Object and extract the data needed to write an inventory that the playbooks can reference
@@ -142,6 +92,7 @@ class AnsibleControlledObject:
             `self_dict (dict)`: The dictonary needed for the ansible playbooks for the child object
         """
         self_dict = {
+            'uuid': self.uuid,
             **self.core_playbook_vars
         }
 
@@ -184,25 +135,26 @@ class AnsibleControlledObject:
         return self_dict
 
 
-@dataclass
 class Container(AnsibleControlledObject):
 
-    # c2_name: str
-    name: str
-    # Default Values
-    required_args = {}
-    container_config = {}
-
-    def __post_init__(self):
+    def __init__(self, name):
+        AnsibleControlledObject.__init__(self)
+        
+        self.name = name
+        # Default Values
+        self.required_args = {}
+        self.container_config = {}
+  
         self.__base_error_message = f'Container Error ({self.name}):'
 
         # Get the provider mappings
-        parsed_yaml = utils.get_container_mappings(False)
+        from utils import get_container_mappings
+        parsed_yaml = get_container_mappings(False)
         services = parsed_yaml['services']
         self.container_config = services.get(self.name)
 
         if not self.container_config:
-            utils.log_error(f'{self.__base_error_message} No container configutation found in container mappings YAML')
+            LogHandler.critical(f'{self.__base_error_message} No container configutation found in container mappings YAML')
 
         # Set the core ansible vars
         self.core_playbook_vars = {
@@ -220,7 +172,8 @@ class Container(AnsibleControlledObject):
         
         # Validate we have each arg
         for req_arg in required_args:
-            env_var = utils.check_for_required_value(ctx, req_arg)
+            from utils import check_for_required_value
+            env_var = check_for_required_value(ctx, req_arg)
             self.required_args[env_var.name] = env_var.get()
 
 
@@ -231,10 +184,38 @@ class Container(AnsibleControlledObject):
 class Provider(TerraformObject):
     """Base class for representing a Terraform provider"""
 
-    def __init__(self, name, source, version):
+    def __init__(self, name, source='', version=''):
         self.name = name
         self.source = source
         self.version = version
+        # Default Values
+        required_args = {}
+        provider_config = {}
+
+    def __post_init__(self):
+        self.__base_error_message = f'Provider Error ({self.name}):'
+
+        # Get the provider mappings
+        from utils import get_terraform_mappings
+        parsed_yaml = get_terraform_mappings()
+        self.provider_config = parsed_yaml.get(self.name)
+
+        if not self.provider_config:
+            LogHandler.critical(f'{self.__base_error_message} No provider configutation found in terraform mappings YAML')
+        
+    def validate(self, ctx):
+        # Get the required args from config
+        required_args = self.provider_config.get('required_args', [])
+
+        # If no required args, just return
+        if not required_args: 
+            return
+        
+        # Validate we have each arg
+        for req_arg in required_args:
+            from utils import check_for_required_value
+            env_var = check_for_required_value(ctx, req_arg)
+            self.required_args[env_var.name] = env_var.get()
 
 
 class SSHKey(TerraformObject):
@@ -245,17 +226,6 @@ class SSHKey(TerraformObject):
         self.ssh_pub_key = ssh_pub_key
 
         TerraformObject.__init__(self, provider, 'ssh_key')
-
-
-class DomainRecord(TerraformObject):
-    """Base class for representing a domain record entry (such as A record or NS record)"""
-
-    def __init__(self, provider, subdomain, record_type):
-        self.subdomain = subdomain
-        self.safe_subdomain = subdomain.replace('.', '-')
-        self.record_type = record_type
-
-        TerraformObject.__init__(self, provider, 'domain')
 
 
 class Domain(TerraformObject):
@@ -278,6 +248,19 @@ class Domain(TerraformObject):
         # Parse out the subdomain
         full_subdomain = '.'.join(split_domain[:split_domain_length - 2])
         self.domain_records.append(DomainRecord(self.provider, full_subdomain, 'A'))
+    
+
+
+class DomainRecord(TerraformObject):
+    """Base class for representing a domain record entry (such as A record or NS record)"""
+
+    def __init__(self, provider, subdomain, record_type):
+        self.subdomain = subdomain
+        self.safe_subdomain = subdomain.replace('.', '-')
+        self.record_type = record_type
+
+        TerraformObject.__init__(self, provider, 'domain')
+
         
 
 #################################################################################################################
@@ -299,7 +282,8 @@ class Server(AnsibleControlledObject, TerraformObject):
         AnsibleControlledObject.__init__(self)
 
         # Get the provider mappings
-        parsed_yaml = utils.get_terraform_mappings()
+        from utils import get_terraform_mappings
+        parsed_yaml = get_terraform_mappings()
         current_provider = parsed_yaml[self.provider]['server']
 
         # Set the values based on the data in the config
@@ -312,33 +296,32 @@ class Server(AnsibleControlledObject, TerraformObject):
 
         self.terraform_size_reference = terry_defaults['server_size'].get('global', None)
         if (not self.terraform_size_reference):
-            utils.log_error(f'No global server size default set for "{self.provider}" in terraform_mappings.yml')
+            LogHandler.error(f'No global server size default set for "{self.provider}" in terraform_mappings.yml')
 
         self.terraform_disk_size_reference = terry_defaults['disk_size'].get('global', None)
         if (not self.terraform_disk_size_reference):
-            utils.log_error(f'No global server disk size default set for "{self.provider}" in terraform_mappings.yml')
+            LogHandler.error(f'No global server disk size default set for "{self.provider}" in terraform_mappings.yml')
 
         # Try to get the server size specific to this server type
         type_specific_terraform_size_reference = terry_defaults['server_size'].get(self.server_type, None)
         if (not type_specific_terraform_size_reference):
-            utils.log_debug(f'No "{self.server_type}" server size default set for "{self.provider}" in terraform_mappings.yml. Using global default value.')
+            LogHandler.debug(f'No "{self.server_type}" server size default set for "{self.provider}" in terraform_mappings.yml. Using global default value.')
         else:
-            utils.log_debug(f'Found "{self.server_type}" specific server size of "{ type_specific_terraform_size_reference }" for "{self.provider}" in terraform_mappings.yml.')
+            LogHandler.debug(f'Found "{self.server_type}" specific server size of "{ type_specific_terraform_size_reference }" for "{self.provider}" in terraform_mappings.yml.')
             self.terraform_size_reference = type_specific_terraform_size_reference
 
         # Try to get the server disk size specific to this server type
         type_specific_terraform_disk_size_reference = terry_defaults['disk_size'].get(self.server_type, None)
         if (not type_specific_terraform_disk_size_reference):
-            utils.log_debug(f'No "{self.server_type}" server disk size default set for "{self.provider}" in terraform_mappings.yml. Using global default value.')
+            LogHandler.debug(f'No "{self.server_type}" server disk size default set for "{self.provider}" in terraform_mappings.yml. Using global default value.')
         else:
-            utils.log_debug(f'Found "{self.server_type}" specific disk size of "{ type_specific_terraform_disk_size_reference }" for "{self.provider}" in terraform_mappings.yml.')
+            LogHandler.debug(f'Found "{self.server_type}" specific disk size of "{ type_specific_terraform_disk_size_reference }" for "{self.provider}" in terraform_mappings.yml.')
             self.terraform_disk_size_reference = type_specific_terraform_disk_size_reference
 
         # Get the core playbook vars setup
         self.core_playbook_vars = {
             'ansible_user': self.ansible_user,
-            'provider': self.provider,
-            'uuid': self.uuid
+            'provider': self.provider
         }
         
 
@@ -394,8 +377,8 @@ class Categorize(Server):
         
         # We can only have one Categorization Server in a build request
         if len(self.domain_map) != 1:
-            utils.log_error(f'{self.__base_error_message} a domain map is required and with only one domain specified')
+            LogHandler.critical(f'{self.__base_error_message} a domain map is required and with only one domain specified')
         if not self.domain_to_impersonate:
-            utils.log_error(f'{self.__base_error_message} a domain to impersonate required')
+            LogHandler.critical(f'{self.__base_error_message} a domain to impersonate required')
 
-            
+    

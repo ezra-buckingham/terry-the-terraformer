@@ -56,6 +56,10 @@
             # Example Redirect Rule
             # RewriteRule ^.*$ https://1.1.1.1:1111%{REQUEST_URI} [P]
 
+      - name: Restart Apache2 Service
+        shell: | 
+          systemctl restart apache2
+
   - name: Logic for DNS Redirector
     when: redirector_type == 'dns'
     block:

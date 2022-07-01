@@ -111,7 +111,8 @@
 
       - name: Open the UFW firewall to allow Nebula subnet to communicate freely
         shell: |
-          ufw allow in on nebula1 && ufw route allow in on nebula1
+          ufw allow in on nebula1
+          ufw route allow in on nebula1
 
 
   - name: Prep the UFW Firewall
