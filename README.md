@@ -27,6 +27,7 @@ There are known issues to Terry. Here are some of the ones I have identified:
 
 * Logging errors to the log file will won't print the stack trace
 * No central managment of wildcard certs (wildcard cert generation likely coming in the future)
+* Nebula path required even when not being used
 * PTR records need to be determined before SMTP will work
   * DigitalOcean will create PTR records from the name of the host, need to make sure name of host is the FQDN
 
