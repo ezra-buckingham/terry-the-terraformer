@@ -184,7 +184,7 @@ def check_for_required_value(ctx_obj, value_name):
     cli_value = ctx_obj.get(value_name.lower(), None)
     if cli_value:
         log_debug(f'{value_name}: Value FOUND in CLI arguments')
-        required_value.set(value_name, cli_value)
+        required_value.set(cli_value)
         return required_value
     else:
         log_debug(f'{value_name}: Value NOT FOUND in CLI arguments')
