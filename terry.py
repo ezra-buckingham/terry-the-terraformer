@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from email.policy import default
 import json
 import logging
 import os
@@ -178,7 +179,7 @@ def create(ctx):
     build_uuid = ''
 
     # Check for certificates directory
-    certificates_directory = Path(ctx.obj['op_directory']).joinpath('.certificates')
+    certificates_directory = Path(ctx.obj['project_directory']).joinpath('.certificates')
     if not certificates_directory.exists():
         LogHandler.warn('Certificates directory not found in project directory, creating that now...')
         certificates_directory.mkdir(parents=True)
@@ -217,9 +218,12 @@ def create(ctx):
     # If the directory exists, we must check the flags supplied to see what Terry should do
     else: 
         LogHandler.warn(f'A plan with the name "{ operation_name }" already exists in "{ ctx.obj["op_directory"] }"')
-        if not ctx.obj['force']:
-            LogHandler.critical('Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag.')
-        LogHandler.warn('Continuing since "-f" / "--force" was supplied.')
+        if not Path(ctx.obj["op_directory"]).joinpath('terraform/terraform.tfstate').exists():
+            LogHandler.warn(f'No terraform state found for "{ operation_name }", continuing with build regardless of "-f" / "--force" flag.')
+        elif not ctx.obj['force']:
+            LogHandler.critical('Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag. Just note that when using the force flag you may overwrite existing Terraform resources.')
+        else:
+            LogHandler.warn('Continuing since "-f" / "--force" was supplied.')
         
     # Load the build config
     if build_config_file.exists():
@@ -249,7 +253,7 @@ def build_infrastructure(ctx_obj, resources):
             LogHandler.warn('Nebula configured for this build, but no Lighthouses found. Either use the "-N" / "--no_nebula" flag or I can build one for you now.')
             response = LogHandler.confirmation('Would you like me to add a Lighthouse to the current build?')
             if response:
-                lighthouse_name = create_resource_name('lighthouse')
+                lighthouse_name = generate_random_name()
 
                 # Now get the provider from the user
                 provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
@@ -287,7 +291,7 @@ def build_infrastructure(ctx_obj, resources):
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
     LogHandler.info('Applying Terrafom plan')
-    return_code, stdout, stderr, terraform_plan = ctx_obj['terrform_handler'].apply_plan(auto_approve=ctx_obj['auto_approve'])
+    return_code, stdout, stderr, terraform_plan = ctx_obj['terraform_handler'].apply_plan(auto_approve=ctx_obj['auto_approve'])
 
     if str(return_code) == '1':
         base_message = 'Terraform returned an error:'
@@ -365,6 +369,9 @@ def reconfigure():
 @click.option('--type', '-t', required=True, type=click.Choice(get_implemented_server_types()), help='''
     The type of server to create
     ''')
+@click.option('--name', '-n', required=True, type=str, default=generate_random_name(), help='''
+    Name of the server (used for creating corresponding DNS records if you use the "domain" command)
+    ''')
 @click.option('--container', '-cT', type=str, multiple=True, help='''
     Containers to install onto the server
     ''')
@@ -373,17 +380,15 @@ def reconfigure():
     (Example: https redirector in AWS at domain example.com with registrar AWS should be "aws:https:example.com:aws)"
     ''')
 @click.option('--redirect_to', '-r2', type=str, help='''
-    Domain to redirect to / impersonate (for categorization usually)
+    Domain to redirect to / impersonate (only deployed with categorize servers)
     ''')
 @click.option('--domain', '-d', multiple=True, type=str, help='''
     Domain and registrar to use in creation of an A record for the resource formatted as "<domain>:<registrar>" (Example: domain example.com with registrar aws should be "example.com:aws)"
     ''')
 @click.pass_obj
-def server(ctx_obj, provider, type, redirector_type, redirect_to, domain, container):
+def server(ctx_obj, provider, type, name, redirector_type, redirect_to, domain, container):
     """Create a server resource"""
 
-    
-    name = create_resource_name(type)
     resources = []
 
     # Build the redirector objects
@@ -425,69 +430,28 @@ def server(ctx_obj, provider, type, redirector_type, redirect_to, domain, contai
 
     return
 
-    # # If we have processed all the commands, pass along to next function
-    # ctx_obj['commands'].pop()
-    # if not ctx_obj['commands']:
-    #     try:
-    #         validate_build_request()
-    #         build_infrastructure()
-    #     except Exception as e:
-    #         message = f"Some exception occurred in the execution of Terry. Please review the logs."
-    #         ctx_obj['slack_handler'].send_error(message)
-    #         message += '\n' + traceback.format_exc()
-    #         LogHandler.critical(message)
 
 @click.command(name='domain')
 @click.option('--provider', '-p', required=True, type=click.Choice(TerraformObject.get_terraform_mappings(simple_list=True)), help='''
     The cloud/infrastructure provider to use when creating the server
     ''')
-@click.option('--type', '-t', required=True, type=str, help='''
+@click.option('--domain', '-d', required=True, type=str, help='''
+    FQDN to use in creation of an record type <type>"
+    ''')
+@click.option('--type', '-t', type=str, default='A', help='''
     The type of record to create
+    ''')
+@click.option('--value', '-v', required=True, type=str, help='''
+    Value of the record (use this if you have a STATIC DNS record that doesn't depend on dynamic data returned from Terraform)
+    ''')
+@click.option('--points_to', '-p2', required=True, type=str, help='''
+    Name of the resource's public IP that you want to populate the value of the record (a resource with this name must exist in the build)
     ''')
 @click.pass_obj
 def domain(ctx_obj, provider, type, redirector_type, redirect_to, domain, container):
-    """Create a server resource"""
+    """Create a domain record"""
 
-    # The name is operationname_lighthouseN, where N is number of existing redirectors + 1 and it must be unique across all deployments since some APIs will error out if they aren't unique (even in different deployments)
-    name = create_resource_name(type)
-    resources = []
-
-    # Build the redirector objects
-    for redirector in redirector_type:
-        # Parse out the defined types
-        redirector = Redirector.from_shorthand_notation(redirector)
-        resources.append(redirector)
-        
-    # Build the domain object
-    domain_map = []
-    for item in domain:
-        item = item.split(':')
-        if len(item) != 2: 
-            LogHandler.critical(f'Domain expects be formated as "<domain>:<registrar>" (example: "example.com:aws")')
-        domain = Domain(item[0], item[1])
-        domain_map.append(domain)
-
-    # Build the container objects
-    containers = [Container(x) for x in list(container)]
-
-    # Build the server object
-    if type == 'teamserver':
-        server = Teamserver(name, provider, domain_map, containers)
-    elif type == 'redirector':
-        server = Redirector(name, provider, domain_map, redirector_type, redirect_to)
-    elif type == 'categorize':
-        server = Categorize(name, provider, domain_map, redirect_to)
-    elif type == 'bare':
-        server = Bare(name, provider, domain_map, containers)
-    elif type == 'lighthouse':
-        server = Lighthouse(name, provider, domain_map)
-    else:
-        LogHandler.critical(f'Got unknown server type: "{type}"')
-
-    # Provide the server with the redirectors and append to build
-    resources.append(server)
-    ctx_obj['server_resources'] += resources
-    ctx_obj['all_resources'] += resources
+    
 
 
 if __name__ == "__main__":

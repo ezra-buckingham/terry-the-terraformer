@@ -78,12 +78,10 @@ def validate_credentials(ctx_obj, check_containers=True):
                 if not container_registry_credentials_checked:
                     LogHandler.debug('Containers found in build, checking for container registry credentials now')
                     # First Validate we were given registry creds
-                    check_for_required_value(ctx_obj, 'container_registry')
-                    check_for_required_value(ctx_obj, 'container_registry_username', hide_input=True)
-                    check_for_required_value(ctx_obj, 'container_registry_password', hide_input=True)
+                    check_for_required_value('container_registry')
+                    check_for_required_value('container_registry_username', hide_input=True)
+                    check_for_required_value('container_registry_password', hide_input=True)
                     container_registry_credentials_checked = True
-                # Now validate the actual container runtime args needed
-                container.validate(ctx_obj)
 
         if resource.domain_map:
             for domain in resource.domain_map:
@@ -93,14 +91,27 @@ def validate_credentials(ctx_obj, check_containers=True):
                 else: 
                     required_providers.add(domain.provider)
 
-    ctx_obj['required_providers'] = [ Provider(provider) for provider in required_providers ]
+    ctx_obj['required_providers'] = []
+    for provider in required_providers:
+        current_provider = Provider(provider)
+        ctx_obj['required_providers'].append(current_provider)
+     
+    LogHandler.info('All required credentials exist for the build')
     
 
+def generate_random_name():
+    """Helper function to create a random resource name"""
 
-@click.pass_obj
-def create_resource_name(ctx_obj, type):
-    """Helper function to create a resource name"""
-    return type + (str([x.server_type for x in ctx_obj['all_resources']].count(type) + 1))
+    word_file = Path("/usr/share/dict/words")
+    words = word_file.read_text().splitlines()
+
+    random_word1 = words[random.randint(0, len(words))].lower()
+    random_word2 = words[random.randint(0, len(words))].lower()
+
+    return f'{random_word1}-{random_word2}'
+
+    # WORDS = open(word_file).read().splitlines()
+    # return type + (str([x.server_type for x in ctx_obj['all_resources']].count(type) + 1))
 
 
 @click.pass_obj
@@ -140,7 +151,7 @@ def find_dict_item(obj, key):
             if item is not None:
                 return item
 
-
+@click.pass_obj
 def check_for_required_value(ctx_obj, value_name, hide_input=False):
     """Will check for a specific value being an environment variable, then check the cli, then check the config file.
     If it finds nothing, it will prompt the user for the value.

@@ -1,0 +1,37 @@
+---
+- name: Setup the Categorization Server
+  hosts: categorize
+  become: true
+  tasks:  
+
+  - name: Verify UFW installed
+    apt:
+      name: ufw
+      state: present
+
+  - name: Allow all web traffic in the firewall
+    shell: |
+      ufw allow from any proto tcp to any port 80
+      ufw allow from any proto tcp to any port 443
+
+  - name: Install Apache2
+    import_tasks: "{{ playbook_dir }}/install/install-apache.yml"
+
+  - name: Install Certbot
+    include_tasks: '{{ playbook_dir }}/install/install-certbot.yml'
+
+  - name: Generate SSL Certificates for the domains
+    include_tasks: '{{ playbook_dir }}/core/generate-ssl-certificates.yml'
+    loop: "{{ domain_map }}"
+    loop_control:
+      loop_var: domain
+  
+  - name: Create the htaccess file for domain impersonation
+    copy:
+      dest: /var/www/html/.htaccess
+      content: |
+        RewriteEngine On
+        RewriteRule ^.*$ https://{{ domain_to_impersonate }}/ [R,L]
+    
+  - name: Enforce firewall rules
+    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"

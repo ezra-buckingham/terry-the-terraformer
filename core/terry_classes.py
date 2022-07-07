@@ -136,8 +136,6 @@ class Container(AnsibleControlledObject):
             **self.required_args
         }
 
-
-    def validate(self, ctx):
         from core import check_for_required_value
 
         # Get the required args from config
@@ -148,8 +146,9 @@ class Container(AnsibleControlledObject):
             return
         
         # Validate we have each arg
+        LogHandler.debug(f'Validating required arguments for the "{self.name}" container')
         for req_arg in required_args:
-            env_var = check_for_required_value(ctx, req_arg)
+            env_var = check_for_required_value(req_arg)
             self.required_args[env_var.name] = env_var.get()
 
 
@@ -198,28 +197,21 @@ class Provider(TerraformObject):
         self.name = name
         self.source = source
         self.version = version
-        # Default Values
-        required_args = {}
-        provider_config = {}
+        self.required_args = {}
 
         parsed_yaml = TerraformObject.get_terraform_mappings()
-        self.provider_config = parsed_yaml.get(self.name)
+        self.provider_config = parsed_yaml.get(self.name, None)
 
         if not self.provider_config:
             LogHandler.critical(f'Provider Error ({self.name}): No provider configutation found in terraform mappings YAML')
         
-    def validate(self, ctx):
-        # Get the required args from config
-        required_args = self.provider_config.get('required_args', [])
-
-        # If no required args, just return
-        if not required_args: 
-            return
+        required_args = self.provider_config['provider'].get('required_args', [])
         
         # Validate we have each arg
+        LogHandler.debug(f'Validating required arguments for the "{self.name}" provider')
         for req_arg in required_args:
-            from utils import check_for_required_value
-            env_var = check_for_required_value(ctx, req_arg)
+            from core import check_for_required_value
+            env_var = check_for_required_value(req_arg)
             self.required_args[env_var.name] = env_var.get()
     
     def to_dict(self):
@@ -418,7 +410,7 @@ class Redirector(Server):
     @classmethod
     def from_shorthand_notation(self, shorthand):
         # Import functions needed
-        from core import build_resource_domain_map, create_resource_name
+        from core import build_resource_domain_map, generate_random_name
 
         # Parse out the defined types
         redirector_definition = shorthand.split(':')
@@ -431,7 +423,7 @@ class Redirector(Server):
 
         # Check if provider is in our list of implemented providers
         if provider not in TerraformObject.get_terraform_mappings(simple_list=True):
-            LogHandler.critical(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {get_terraform_mappings(simple_list=True)}')
+            LogHandler.critical(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {TerraformObject.get_terraform_mappings(simple_list=True)}')
         
         # Check if protocol supported as given by the user
         if protocol not in self.get_implemented_redirectors():
@@ -450,7 +442,7 @@ class Redirector(Server):
                 LogHandler.critical(f'Invalid redirector provided: "{shorthand}". Please make sure you define EITHER only the "<provider>:<protocol>" OR the "<provider>:<protocol>:<domain>:<registrar>"')
             LogHandler.warn(f'Redirector provided without domain: "{shorthand}". Building without any domain.')                
 
-        name = create_resource_name("redir")
+        name = generate_random_name()
         redirector_name = f'{name}-{redirector_definition[1]}'
 
         return Redirector(redirector_name, redirector_definition[0], redirector_domain_map, redirector_definition[1], None)

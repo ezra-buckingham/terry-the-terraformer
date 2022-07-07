@@ -1,5 +1,5 @@
 # Create a new SSH key
-resource "aws_key_pair" "{{ ssh_key_name }}" {  # Value provided by Jinja
-  key_name = "{{ ssh_key_name }}" # Value provided by Jinja
-  public_key = "{{ ssh_pub_key.decode('utf-8') }}" # Value provided by Jinja
+resource "aws_key_pair" "{{ name }}" {  # Value provided by Jinja
+  key_name = "{{ name }}" # Value provided by Jinja
+  public_key = "{{ public_key.decode('utf-8') }}" # Value provided by Jinja
 }
