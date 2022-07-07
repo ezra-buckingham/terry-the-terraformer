@@ -1,8 +1,10 @@
 from json import JSONDecodeError
+from pathlib import Path
 from python_terraform import *
 from dataclasses import dataclass
 from hashlib import sha256
 from shutil import which
+from core.binary_handler import BinaryHandler
 
 from core.log_handler import LogHandler
 
@@ -13,18 +15,13 @@ class TerraformHandler:
     """
 
     def __init__(self, terraform_path, working_dir):
-        self.terraform_path = terraform_path
-        self.working_dir = working_dir.joinpath('terraform')
-        if self.terraform_path:
-            self.terraform = Terraform(working_dir=self.working_dir, terraform_bin_path=self.terraform_path)
-        else:
-            try:
-                self.terraform = Terraform(working_dir=self.working_dir)
-            except JSONDecodeError as e:
-                message = 'There was a JSON error with the Terraform Handler, there may be a lock file that cannot be read.'
-                LogHandler.error(message)
-                print(message)
-                exit(code=1)
+        self.terraform_binary = BinaryHandler('terraform', terraform_path)
+        self.working_dir = Path(working_dir).joinpath('terraform')
+        try:
+            self.terraform = Terraform(working_dir=self.working_dir, terraform_bin_path=self.terraform_binary.path)
+        except JSONDecodeError as e:
+            message = 'Terraform Error: There was a JSON error with the Terraform Handler, there may be a lock file that cannot be read.'
+            LogHandler.critical(message)
             
             
     def apply_plan(self, auto_approve=False):

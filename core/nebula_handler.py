@@ -2,6 +2,7 @@ import ipaddress
 from pathlib import Path
 from subprocess import CalledProcessError
 
+from core.binary_handler import BinaryHandler
 from core.log_handler import LogHandler
 from core.shell_handler import ShellHandler
 
@@ -12,9 +13,10 @@ class NebulaHandler:
     """
 
     def __init__(self, nebula_path, nebula_subnet, working_dir):
-        self.nebula_path = nebula_path
-        self.nebula_ca_binary = Path(self.nebula_path).joinpath('nebula-cert')
-        self.working_dir = working_dir.joinpath('nebula')
+        self.nebula_path = Path(nebula_path)
+        self.nebula_binary = BinaryHandler('nebula', Path(nebula_path).joinpath('nebula'))
+        self.nebula_ca_binary = BinaryHandler('nebula-ca', Path(nebula_path).joinpath('nebula'))
+        self.working_dir = Path(working_dir).joinpath('nebula')
         self.nebula_subnet = ipaddress.IPv4Network(nebula_subnet)
         self.__assigned_ips = set()
 
@@ -32,6 +34,10 @@ class NebulaHandler:
         
 
     def generate_ca_certs(self):
+        # Check if the certificate exists
+        if self.working_dir.joinpath('ca.crt').exists():
+            LogHandler.info('Nebula root certificate found, skipping generating new certificate')
+            return
         
         # Create the command and run it
         generate_command = f'{ str(self.nebula_ca_binary) } ca -name 5TAG3'
@@ -47,6 +53,12 @@ class NebulaHandler:
         LogHandler.info('Generated Nebula CA Root certificate and key')
 
     def generate_client_cert(self, name):
+        # Check if the certificate exists
+        if self.working_dir.joinpath(f'{name}.crt').exists():
+            LogHandler.info(f'Nebula host certificate found for "{name}", deleting existing and generating new certificate key pair')
+            self.working_dir.joinpath(f'{name}.crt').unlink()
+            self.working_dir.joinpath(f'{name}.key').unlink()
+
         # Get a new IP from the range
         new_ip = self.__get_new_ip()
         new_ip_cidr = str(new_ip) + '/' + str(self.nebula_subnet.prefixlen)

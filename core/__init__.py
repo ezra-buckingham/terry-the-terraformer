@@ -61,32 +61,31 @@ class JinjaHandler:
         variables = meta.find_undeclared_variables(parsed_content)
         return variables
 
-@dataclass 
+
 class SlackHandler:
     """A class to help with sending Slack Messages to webhooks"""
-    webhook_url: str
-    template_location: str = 'templates/slack'
-    _jinja_handler: JinjaHandler = None
-    _success_template_name: str = 'slack_success_message.j2'
-    _destroy_success_template_name: str = 'slack_destroy_success_message.j2'
-    _error_template_name: str = 'slack_error_message.j2'
-    
-    def __post_init__(self):
-        self._jinja_handler = JinjaHandler(self.template_location)
+
+    def __init__(self, webhook_url, quiet_mode=False):
+        self.webhook_url = webhook_url
+        self.quiet_mode = quiet_mode
+        self._jinja_handler = JinjaHandler('templates/slack')
     
     def send_success(self, data):
-        payload = self._jinja_handler.get_and_render_template(self._success_template_name, data)
+        payload = self._jinja_handler.get_and_render_template('slack_success_message.j2', data)
         self._send(payload)
 
     def send_destroy_success(self, data):
-        payload = self._jinja_handler.get_and_render_template(self._destroy_success_template_name, data)
+        payload = self._jinja_handler.get_and_render_template('slack_destroy_success_message.j2', data)
         self._send(payload)
 
     def send_error(self, message):
-        payload = self._jinja_handler.get_and_render_template(self._error_template_name, {'message': message})
+        payload = self._jinja_handler.get_and_render_template('slack_error_message.j2', {'message': message})
         self._send(payload)
         
     def _send(self, payload):
+        if self.quiet_mode:
+            LogHandler.debug('Skipping sending Slack Notification because quiet mode is on. SHHHHHHH!')
+            return
         try:
             payload = payload.encode("utf-8")
             results = requests.post(self.webhook_url, payload)
@@ -121,7 +120,7 @@ class EnvironmentVariableHandler:
 class BinaryExecutableHandler:
     """Class to represent binaries that may be required for Terry to run"""
     name: str
-    path: object
+    path: Path
 
     def __post_init__(self):
         base_message = f'Binary Executable Error: "{self.name}"'

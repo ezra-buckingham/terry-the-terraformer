@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from itertools import chain
 import json
 import logging
 import re
@@ -13,84 +14,8 @@ from pathlib import Path
 from core import *
 import utils
 
-
+@click.pass_obj
 def build_infrastructure(ctx_obj):
-    """This is the main body.
-    After click is complete, come here and work through the other steps.
-    Easier to follow execution flow from a main function than it is to jump
-    from function to function.
-    """
-
-    operation_name = ctx_obj["operation"]
-    build_config_file = Path(ctx_obj['op_directory'].joinpath('.terry/build_config.yml'))
-    build_uuid = ''
-
-    # Check for project directory
-    if not ctx_obj['project_directory'].exists():
-        LogHandler.warn('Project directory not found, creating that now...')
-        ctx_obj['project_directory'].mkdir()
-
-    # Check for certificates directory
-    if not ctx_obj['certificates_directory'].exists():
-        LogHandler.warn('Certificates directory not found in project directory, creating that now...')
-        ctx_obj['certificates_directory'].mkdir()
-
-    # Check that the Operation Directory exists, along with all required other files
-    if not ctx_obj['op_directory'].exists():
-        LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable) now...')
-        ctx_obj['op_directory'].mkdir()
-        # Does not account for situations where op_directory exists but these children do not
-        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
-            ctx_obj['op_directory'].joinpath(path).mkdir(parents=True)
-
-        # Generate the SSH Keys and write them to disk
-        public_key, private_key = utils.generate_ssh_key()
-
-        # Write the private ssh key to the folder
-        file_path = operation_name + '_key'
-        key_file = Path(ctx_obj['op_directory'].joinpath(file_path))
-        pub_key_file = Path(ctx_obj['op_directory'].joinpath(file_path + '.pub'))
-
-        # Write the keys and change perms
-        pub_key_file.write_bytes(public_key)
-        key_file.write_bytes(private_key)
-        os.chmod(str(key_file), 0o700)
-
-        # Create the config for the build
-        config = { 'uuid': str(uuid.uuid4()) }
-        build_config_yaml = yaml.safe_dump(config)
-        build_config_file.write_text(build_config_yaml)
-
-        # Check to see if any remote configurations were defined
-        for remote_config in ctx_obj["ansible_configuration"]["remote"]:
-            LogHandler.info(f'Found name of "{ remote_config["name"] }" for a remote configuration, loading it now...')
-            remote_config = RemoteConfigurationHandler(remote_config["name"], remote_config["repo_url"], remote_config["username"], remote_config["personal_access_token"])
-
-            # Write out the configuration to the op_directory
-            configuration_location = ctx_obj['op_directory'].joinpath(f'ansible/extra_vars/{ remote_config.configuration_name }.yml')
-            LogHandler.debug(f'Writing out "{ remote_config.configuration_name }" remote configuration to "{ configuration_location }"')
-            yaml_contents = yaml.dump(remote_config.configuration)
-            configuration_location.write_text(yaml_contents)
-
-    # If the directory exists, we must check the flags supplied to see what Terry should do
-    else: 
-        base_message = f'A plan with the name "{ operation_name }" already exists in "{ ctx_obj["op_directory"] }"'
-        if ctx_obj['force']:
-            LogHandler.warn(f'{base_message}. Continuing since "-f" / "--force" was supplied.')
-        elif ctx_obj['modify']:
-            # TODO Add logic to modify a deployment
-            raise NotImplementedError
-        else:
-            LogHandler.critical(f'{base_message}. Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag.')
-    
-    # Load the build config
-    if build_config_file.exists():
-        build_config = build_config_file.read_text()
-        build_config_yaml = yaml.safe_load(build_config)
-        build_uuid = build_config_yaml['uuid']
-    else:
-        LogHandler.warn(f'No build configuration found for "{operation_name}", it was likely built with an older version of Terry. Some features may not be available due to this.')
-
     # Load the public key so we can build the ssh key resources later
     public_key, private_key = utils.get_operation_ssh_key_pair(ctx_obj)
     ctx_obj['ssh_pub_key'] = public_key
@@ -98,25 +23,19 @@ def build_infrastructure(ctx_obj):
     # Read in the Terraform mapping and give it to the click object
     ctx_obj['terraform_mappings'] = utils.get_terraform_mappings()
 
-    
-
+    for resource in ctx_obj['all_resources']:
+        resource.containers[0].__dict__()
 
     utils.build_ansible_inventory(ctx_obj)
 
-    # Create the terraform handler object and build plan
+    # Create the terraform plan and build it 
     LogHandler.info('Building Terraform plan')
-    terraform_handler = TerraformHandler(ctx_obj['binaries']['terraform'].path, ctx_obj['op_directory'])
     plan = utils.build_plan(ctx_obj)
-
-    # Write the plan to a file
-    file_path = 'terraform/' + ctx_obj['operation'] + '_plan.tf'
-    plan_file = ctx_obj['op_directory'].joinpath(file_path)
+    plan_file = Path(ctx_obj['op_directory']).joinpath(f'terraform/{ ctx_obj["operation"] }_plan.tf')
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
-        
-    # Apply plan
     LogHandler.info('Applying Terrafom plan')
-    return_code, stdout, stderr, terraform_plan = terraform_handler.apply_plan(auto_approve=ctx_obj['auto_approve'])
+    return_code, stdout, stderr, terraform_plan = ctx_obj['terrform_handler'].apply_plan(auto_approve=ctx_obj['auto_approve'])
 
     if str(return_code) == '1':
         base_message = 'Terraform returned an error:'
@@ -137,20 +56,9 @@ def build_infrastructure(ctx_obj):
     # Configure Nebula
     if not ctx_obj['no_nebula']:
         LogHandler.info('Setting up Nebula configurations and certificates')
-        nebula_handler = NebulaHandler(ctx_obj['binaries']['nebula'].path, ctx_obj['nebula_subnet'], ctx_obj['op_directory'])
-        # Check if we have a root cert yet
-        if ctx_obj['op_directory'].joinpath('nebula/ca.crt').exists():
-            LogHandler.info('Nebula root certificate found, skipping generating new certificate')
-        else:
-            nebula_handler.generate_ca_certs()
+        ctx_obj['nebula_handler'].generate_ca_certs()
         for resource in ctx_obj['all_resources']:
-            # Check if we have a host certificate, if so, delete it
-            if ctx_obj['op_directory'].joinpath(f'nebula/{resource.name}.crt').exists():
-                LogHandler.info(f'Nebula host certificate found for "{resource.name}", deleting existing and generating new certificate key pair')
-                ctx_obj['op_directory'].joinpath(f'nebula/{resource.name}.crt').unlink()
-                ctx_obj['op_directory'].joinpath(f'nebula/{resource.name}.key').unlink()
-            # Generate the new certificate
-            assigned_nebula_ip = nebula_handler.generate_client_cert(resource.name)
+            assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.name)
             resource.nebula_ip = assigned_nebula_ip
             # Assign the lighthouse values so they can go into the config
             if isinstance(resource, Lighthouse):
@@ -160,54 +68,55 @@ def build_infrastructure(ctx_obj):
         LogHandler.info('Skipping setting up Nebula configurations and certificates')
 
     # Create the pickle file for the built resources
-    LogHandler.debug('Building a pickle of the current resources and Ansible inventory')
-    #utils.build_resource_pickle(ctx_obj)    
+    LogHandler.debug('Building Ansible inventory')  
     utils.build_ansible_inventory(ctx_obj)
-
-    # Configure Ansible
-    LogHandler.debug('Setting up Ansible environment')
-    ansible_working_dir = ctx_obj['op_directory'].joinpath('ansible')
-    ansible_handler = AnsibleHandler(ssh_key=private_key, working_dir=ansible_working_dir)
 
     # Run all the Prep playbooks
     root_playbook_location = '../../../playbooks'
-    ansible_handler.run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
-    ansible_handler.run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
 
     # Run all the server-type specific playbooks
-    ansible_handler.run_playbook(f'{ root_playbook_location }/setup-containers.yml')
-    ansible_handler.run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
-    ansible_handler.run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
-    ansible_handler.run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
     
     LogHandler.info('Ansible setup complete')
     ctx_obj['end_time'] = utils.get_formatted_time()
+    ctx_obj['slack_handler'].send_success(ctx_obj)
 
-    # Let the team know its ready to go
-    if not ctx_obj['quiet'] and ctx_obj['slack_webhook_url']:
-        slack_handler = SlackHandler(ctx_obj['slack_webhook_url'])
-        slack_handler.send_success(ctx_obj)
 
-    LogHandler.info('Script complete! Enjoy the tools you tool!')
+@click.pass_context
+def prepare_handlers(ctx):
+    # Create a Terraform handler
+    terraform_path = ctx.obj['config_contents']['global']['terraform_path']
+    ctx.obj['terraform_handler'] = TerraformHandler(terraform_path, ctx.obj['op_directory'])
+
+    # Create the Slack Handler
+    slack_webhook_url =  ctx.obj['config_contents']['slack']['webhook_url']
+    ctx.obj['slack_handler'] = SlackHandler(slack_webhook_url, ctx.obj['quiet'])
+    
+    # If not destroy, create all the other required handlers
+    if not ctx.command.name == 'destroy':
+        # Create the Ansible Handler
+        ansible_path = ctx.obj['config_contents']['global']['ansible_path']
+        ctx.obj['ansible_handler'] = AnsibleHandler(ansible_path, Path(ctx.obj['op_directory']).joinpath('ansible'))
+
+        # Create the Nebula Handler (if applicable)
+        if not ctx.obj['no_nebula']:
+            nebula_path = ctx.obj['config_contents']['global']['nebula_path']
+            ctx.obj['nebula_handler'] = NebulaHandler(nebula_path, ctx.obj['config_contents']['global']['nebula_subnet'], Path(ctx.obj['op_directory']).joinpath('nebula'))
 
 
 @click.pass_context
 def validate_build_request(ctx):
     """Validates the build and accessibility to required binaries to run"""
-    
-    # Validate some of the options
-    if not ctx.obj['quiet'] and not ctx.obj['slack_webhook_url']:
-        LogHandler.warn(f'Quiet field "--quiet" not supplied, but no notification webhooks were found in the configuration file. Terry will be quiet :)')
-
-    # If running destroy as one of the commands, that can be the only command present
-    if ('destroy' in ctx.obj['commands'] and len(ctx.obj['commands']) > 1):
-        LogHandler.critical(f'Other commands found along with the "destroy" command. If using "destroy," you can only use it as a standalone command.')
-        
+   
     # If there is a Categorization server being built, it must be the only resource
     if len([ x for x in ctx.obj["all_resources"] if isinstance(x, Categorize) ]) >= 1 and len(ctx.obj["resources"]) > 1:
         LogHandler.critical(f'Ensure the categorization server is the only resource being made in a single deployment')
 
-    
     # If using Nebula, check we have everything needed for the build
     lighthouses = [ x for x in ctx.obj["all_resources"] if isinstance(x, Lighthouse) ]
     # Check if we want to build nebula and if destory is not the command
@@ -257,7 +166,7 @@ def validate_build_request(ctx):
         # Check to see if we have a domain map and that we have valid registars
         if resource.domain_map:
             for domain in resource.domain_map:
-                registrars = utils.get_implemented_providers(simple_list=True, is_registrar=True)
+                registrars = utils.get_terraform_mappings(simple_list=True, type='registrar')
                 if not domain.provider in registrars:
                     LogHandler.critical(f'Registrar of {domain.provider} not implemented. Please implement it and rerun or change the registrar.')
                 else: 
@@ -277,18 +186,17 @@ def validate_build_request(ctx):
                 # Now validate the actual container runtime args needed
                 container.validate(ctx.obj)
 
-    
     ctx.obj['required_providers'] = [ Provider(provider) for provider in required_providers ]
 
     LogHandler.debug('Build looks good! Terry, take it away!')
 
-@click.pass_context
-def create_resource_name(ctx, type):
+@click.pass_obj
+def create_resource_name(ctx_obj, type):
     """Helper function to create a resource name"""
-    return type + (str([x.server_type for x in ctx.obj['all_resources']].count(type) + 1))
+    return type + (str([x.server_type for x in ctx_obj['all_resources']].count(type) + 1))
 
 
-@click.group(chain=True, context_settings=dict(help_option_names=['-h', '--help', '--how-use', '--freaking-help-plz', '--stupid-terry']))
+@click.group(chain=False, context_settings=dict(help_option_names=['-h', '--help', '--how-use', '--freaking-help-plz', '--stupid-terry']))
 @click.option('-c', '--config', default="config.yml", type=click.Path(exists=True), help='''
     Path to configuration file in .yml format
     ''')
@@ -297,9 +205,6 @@ def create_resource_name(ctx, type):
     ''')
 @click.option('-a', '--auto_approve', is_flag=True, default=False, help='''
     Auto approve the Terraform apply commands (only works when building, destory will auto-approve by default)
-    ''')
-@click.option('-m', '--modify', is_flag=True, default=False, help='''
-    Instead of creating a whole new deployment, modify an existing one with the same operation name
     ''')
 @click.option('-f', '--force', is_flag=True, default=False, help='''
     Force the build to go through, even if a deployment already exists with the opration name listed
@@ -310,7 +215,8 @@ def create_resource_name(ctx, type):
 @click.option('-v', '--verbose', is_flag=True, default=False, help='''
     Verbose output from Terry (does not change what is logged in the log file)
     ''')
-@click.option('-l', '--log_file', default='./log_terry.log', help='''
+    
+@click.option('-l', '--log_file', default='./log_terry.log', type=Path, help='''
     Location to write log file to
     ''')
 @click.option('-N', '--no_nebula', is_flag=True, default=False, help='''
@@ -359,7 +265,7 @@ def create_resource_name(ctx, type):
     Path to malleable C2 profile to use when starting CobaltStrike
     ''')
 @click.pass_context
-def cli(ctx, config, operation, auto_approve, modify, force, quiet, verbose, log_file, no_nebula,
+def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, no_nebula,
     container_registry, container_registry_username, container_registry_password, 
     aws_access_key_id, aws_secret_access_key, aws_default_region, 
     digital_ocean_token, 
@@ -376,60 +282,151 @@ def cli(ctx, config, operation, auto_approve, modify, force, quiet, verbose, log
     # Change verbosity level
     if verbose: """"""
 
-    # Build list of possible commands (e.g. teamserver, redirector) based on Click context
-    command_list = list(ctx.to_info_dict()['command']['commands'].keys())
-    commands = [c for c in sys.argv[1:] if c in command_list]
-
     # Open and parse the config file
-    with open(config, 'r') as config_file:
-        conf_dict = yaml.safe_load(config_file.read())
-
-    # Get each section values from config file
-    global_conf = conf_dict.get('global', {})
-    ansible_configurations = conf_dict.get('ansible_configuration', [])
-    slack_conf = conf_dict.get('slack', {})
-    
-    # Parse through the global values
-    project_directory = global_conf.get('project_directory')
-    terraform_path = global_conf.get('terraform_path')
-    ansible_path = global_conf.get('ansible_path')
-    nebula_path = global_conf.get('nebula_path')
-    nebula_subnet = global_conf.get('nebula_subnet')
-
-    # Slack Values
-    slack_webhook_url = slack_conf.get('webhook_url')
+    config_contents = Path(config).read_text()
+    config_contents = yaml.safe_load(config_contents)
 
     # Get the operation directory
-    op_directory = Path(project_directory).joinpath(operation)
+    project_directory = Path(config_contents['global']['project_directory'])
 
     # Create a context (ctx) object (obj) for Click to pass around that stores relevant information
     # Only add the things that come from the config file, all the other values will come from the params
     ctx.ensure_object(dict)
     ctx.obj['start_time'] = utils.get_formatted_time()
     ctx.obj['command_run'] = command_run
-    ctx.obj['project_directory'] = Path(project_directory)
-    ctx.obj['certificates_directory'] = Path(project_directory).joinpath('.certificates')
-    ctx.obj['commands'] = commands  # The list of commands (e.g. teamserver, redirector) passed to infrared.py
-    ctx.obj['config_location'] = config  # Path to configuration file
-    ctx.obj['config_values'] = conf_dict
-    ctx.obj['nebula_subnet'] = nebula_subnet
+    ctx.obj['project_directory'] = Path(config_contents['global']['project_directory'])
+    ctx.obj['config'] = config  # Path to configuration file
+    ctx.obj['config_contents'] = config_contents
     ctx.obj['safe_operation_name'] = re.sub(r'[^a-zA-Z]', '', operation) # Strip out only letters
-    ctx.obj['op_directory'] = op_directory
-    ctx.obj['ansible_configuration'] = ansible_configurations
-    ctx.obj['implemented_providers'] = utils.get_implemented_providers() 
+    ctx.obj['op_directory'] = project_directory.joinpath(operation)
     ctx.obj['resources'] = []  # List of resources (teamservers, redirectors) constituting the infrastructure
     ctx.obj['all_resources'] = []  # List of resources (teamservers, redirectors), including redirectors (which are children objects of a resource)
-    ctx.obj['slack_webhook_url'] = slack_webhook_url
-    ctx.obj['binaries'] = {
-        'terraform': BinaryExecutableHandler('terraform', terraform_path),
-        'ansible': BinaryExecutableHandler('ansible', ansible_path)
-    }
-    if not no_nebula: ctx.obj['binaries']['nebula'] = BinaryExecutableHandler('nebula', nebula_path)
-
+    
     ctx.obj = {**ctx.obj, **ctx.params}
 
-@cli.command(name='server')
-@click.option('--provider', '-p', required=True, type=click.Choice(utils.get_implemented_providers(simple_list=True)), help='''
+
+@cli.command(name='destroy')
+@click.option('--recursive', '-r', is_flag=True, default=False, help='''
+    Destroy all files and folders associated with the deployment as well
+    ''')
+@click.pass_obj
+def destroy(ctx_obj, recursive):
+    """Destroy the infrastructure built by terraform"""
+
+    LogHandler.info(f'Destroying the "{ ctx_obj["operation"] }" plan')
+
+    # Prepare all required handlers
+    prepare_handlers()
+
+    success, stdout, stderr = ctx_obj['terraform_handler'].destroy_plan()
+
+    if success or success is None:
+        if success:
+            LogHandler.info('Terraform resource destruction complete')
+            ctx_obj['slack_handler'].send_destroy_success(ctx_obj)
+        else:
+            LogHandler.warn('No Terraform state was found, so no destruction to perform')
+        if recursive:
+            if Path(ctx_obj['op_directory']).exists():
+                LogHandler.warn(f'Destroying all files associated with "{ ctx_obj["operation"] }"')
+                utils.remove_directory_recursively(ctx_obj["op_directory"])
+                LogHandler.info('File destruction complete')
+            else:
+                LogHandler.critical(f'No files or folder found for "{ ctx_obj["operation"] }"', True)
+    else:
+        LogHandler.critical(f'Error when destroying "{ ctx_obj["operation"] }"\r\nSTDOUT: {stdout}\r\nSTDERR: {stderr}', True)
+
+
+@cli.group(name='create', chain=True)
+@click.pass_obj
+def create(ctx_obj):
+    """Create a new deployment"""
+
+    LogHandler.info(f'Creating the "{ ctx_obj["operation"] }" plan')
+
+    # Prepare all required handlers
+    prepare_handlers()
+
+    operation_name = ctx_obj["operation"]
+    build_config_file = Path(ctx_obj['op_directory']).joinpath('.terry/build_config.yml')
+    build_uuid = ''
+
+    # Check for certificates directory
+    certificates_directory = Path(ctx_obj['op_directory']).joinpath('.certificates')
+    if not certificates_directory.exists(parents=True):
+        LogHandler.warn('Certificates directory not found in project directory, creating that now...')
+        certificates_directory.mkdir()
+
+    # Check that the Operation Directory exists, along with all required other files
+    if not Path(ctx_obj['op_directory']).exists():
+        LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable) now...')
+        Path(ctx_obj['op_directory']).mkdir(parents=True)
+        # Does not account for situations where op_directory exists but these children do not
+        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
+            Path(ctx_obj['op_directory']).joinpath(path).mkdir(parents=True)
+
+        # Generate the SSH Keys and write them to disk
+        public_key, private_key = utils.generate_ssh_key()
+
+        # Write the private ssh key to the folder
+        file_path = operation_name + '_key'
+        key_file = Path(ctx_obj['op_directory']).joinpath(file_path)
+        pub_key_file = Path(ctx_obj['op_directory']).joinpath(file_path + '.pub')
+
+        # Write the keys and change perms
+        pub_key_file.write_bytes(public_key)
+        key_file.write_bytes(private_key)
+        os.chmod(str(key_file), 0o700)
+
+        # Create the config for the build
+        config = { 'uuid': str(uuid.uuid4()) }
+        build_config_yaml = yaml.safe_dump(config)
+        build_config_file.write_text(build_config_yaml)
+
+        # Check to see if any remote configurations were defined
+        for remote_config in ctx_obj["ansible_configuration"]["remote"]:
+            LogHandler.info(f'Found name of "{ remote_config["name"] }" for a remote configuration, loading it now...')
+            remote_config = RemoteConfigurationHandler(remote_config["name"], remote_config["repo_url"], remote_config["username"], remote_config["personal_access_token"])
+
+            # Write out the configuration to the op_directory
+            configuration_location = Path(ctx_obj['op_directory']).joinpath(f'ansible/extra_vars/{ remote_config.configuration_name }.yml')
+            LogHandler.debug(f'Writing out "{ remote_config.configuration_name }" remote configuration to "{ configuration_location }"')
+            yaml_contents = yaml.safe_dump(remote_config.configuration)
+            configuration_location.write_text(yaml_contents)
+
+    # If the directory exists, we must check the flags supplied to see what Terry should do
+    else: 
+        base_message = f'A plan with the name "{ operation_name }" already exists in "{ ctx_obj["op_directory"] }"'
+        if ctx_obj['force']:
+            LogHandler.warn(f'{base_message}. Continuing since "-f" / "--force" was supplied.')
+        else:
+            LogHandler.critical(f'{base_message}. Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag.')
+    
+    # Load the build config
+    if build_config_file.exists():
+        build_config = build_config_file.read_text()
+        build_config_yaml = yaml.safe_load(build_config)
+        build_uuid = build_config_yaml['uuid']
+    else:
+        LogHandler.warn(f'No build configuration found for "{operation_name}", it was likely built with an older version of Terry. Some features may not be available due to this.')
+
+
+@cli.group(name='add')
+@click.pass_obj
+def add():
+    """Add to an existing deployment"""
+    pass
+
+
+@cli.group(name='reconfigure')
+@click.pass_obj
+def reconfigure():
+    """Reconfigure a deployment by refreshing Terraform state and re-running playbooks against each host"""
+    pass
+
+
+@click.command(name='server')
+@click.option('--provider', '-p', required=True, type=click.Choice(utils.get_terraform_mappings(simple_list=True)), help='''
     The cloud/infrastructure provider to use when creating the server
     ''')
 @click.option('--type', '-t', required=True, type=click.Choice(utils.get_implemented_server_types()), help='''
@@ -448,7 +445,6 @@ def cli(ctx, config, operation, auto_approve, modify, force, quiet, verbose, log
 @click.option('--domain', '-d', multiple=True, type=str, help='''
     Domain and registrar to use in creation of an A record for the resource formatted as "<domain>:<registrar>" (Example: domain example.com with registrar aws should be "example.com:aws)"
     ''')
-@click.pass_context
 def server(ctx, provider, type, redirector_type, redirect_to, domain, container):
     """Create a server resource"""
 
@@ -469,7 +465,7 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
         redirector_provider = redirector_definition[0]
 
         # Check if provider is in our list of implemented providers
-        if redirector_provider not in utils.get_implemented_providers(simple_list=True):
+        if redirector_provider not in utils.get_terraform_mappings(simple_list=True):
             LogHandler.critical(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {utils.get_implemented_providers(simple_list=True)}')
 
         proto = redirector_definition[1]
@@ -544,40 +540,8 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
             LogHandler.critical(message)
 
 
-@cli.command(name='destroy')
-@click.option('--recursive', '-r', is_flag=True, default=False, help='''
-    Destroy all files and folders associated with the deployment as well
-    ''')
-@click.pass_context
-def destroy(ctx, recursive):
-    """ Destroy the infrastructure built by terraform"""
-
-    LogHandler.info(f'Destroying the "{ ctx.obj["operation"] }" plan')
-    # First validate the request, as we may be missing dependencies
-    validate_build_request()
-    tf_path = ctx.obj['binaries']['terraform']
-    terraform_handler = TerraformHandler(tf_path.path, ctx.obj['op_directory'])
-    success, stdout, stderr = terraform_handler.destroy_plan()
-
-    if success or success is None:
-        if success:
-            LogHandler.info('Terraform resource destruction complete')
-            # Let the team know its ready to go
-            if not ctx.obj['quiet'] and ctx.obj['slack_webhook_url']:
-                slack_handler = SlackHandler(ctx.obj['slack_webhook_url'])
-                slack_handler.send_destroy_success(ctx.obj)
-        else:
-            LogHandler.warn('No Terraform state was found, so no destruction to perform')
-        if recursive:
-            if ctx.obj['op_directory'].exists():
-                LogHandler.warn(f'Destroying all files associated with "{ ctx.obj["operation"] }"')
-                utils.remove_directory_recursively(ctx.obj["op_directory"])
-                LogHandler.info('File destruction complete')
-            else:
-                LogHandler.critical(f'No files or folder found for "{ ctx.obj["operation"] }"', True)
-    else:
-        LogHandler.critical(f'Error when destroying "{ ctx.obj["operation"] }"\r\nSTDOUT: {stdout}\r\nSTDERR: {stderr}', True)
-    
-
 if __name__ == "__main__":
+    create.add_command(server)
+    add.add_command(server)
     cli()
+    LogHandler.info('Terry run complete! Enjoy the tools you tool!')

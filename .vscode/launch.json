@@ -9,10 +9,22 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "documentation", "-v", "-f", "-a", 
-        "server", "-t", "teamserver", "-cT", "sliver", "-rT", "digitalocean:dns:dermain.focusfireandsecuity.net:aws", "-p", "aws",
+        "-o", "documentation", "-v", "-f", "-a", "create", 
+        "server", "-t", "teamserver", "-cT", "cobaltstrike", "-rT", "digitalocean:dns:dermain.focusfireandsecuity.net:aws", "-p", "aws",
         "server", "-t", "bare", "-p", "aws",
         "server", "-t", "lighthouse", "-p", "digitalocean"
+      ],
+      //"preLaunchTask": "Remove terry_testing files"
+    },
+    {
+      "name": "Testing Terry Destroy",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "./terry.py",
+      "console": "integratedTerminal",
+      "args": [
+        "-o", "documentation", "destroy"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },

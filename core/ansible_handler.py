@@ -1,5 +1,8 @@
+from pathlib import Path
 import jinja2
 import ansible_runner
+
+from core.binary_handler import BinaryHandler
 
 class AnsibleHandler:
     """
@@ -10,12 +13,10 @@ class AnsibleHandler:
     Known issue https://github.com/ansible/ansible-runner/issues/544
     """
 
-    def __init__(self, ssh_key=None, working_dir=None, ansible_path=None): 
-        self.ansible_path = ansible_path
+    def __init__(self, ansible_path=None, working_dir=None, ssh_key=None): 
+        self.ansible_binary = BinaryHandler('ansible', ansible_path)
         self.working_dir = working_dir
         self.ssh_key = ssh_key
-        self.template_loader = jinja2.FileSystemLoader(searchpath="./templates")
-        self.template_env = jinja2.Environment(loader=self.template_loader)
 
     def run_playbook(self, playbook_path, user=None, playbook_vars=None, inventory=None, retry_limit=3, **kwargs):
         command_line_args = ''

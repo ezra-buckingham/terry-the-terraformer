@@ -57,7 +57,6 @@ def check_for_required_value(ctx_obj, value_name):
 
     required_value = EnvironmentVariableHandler(value_name)
             
-
     # First, check the command line for the argument needed for the provider
     cli_value = ctx_obj.get(value_name.lower(), None)
     if cli_value:
@@ -138,35 +137,6 @@ def get_implemented_server_types():
     return server_types
 
 
-def get_implemented_providers(simple_list=False, is_registrar=False):
-    """Gets the list of provider files in the 'templates/terraform/providers' directory
-
-    Args:
-        `simple_list (bool)`: If true, will only return list[str] else list[Path]
-        `is_registrar (bool)`: If true, will only retutn list of registrars
-    Returns:
-        `implmented_providers (list[str] | list[Path])`: The list of implemented providers
-    """
-
-    # Get the terraform mappings
-    terraform_mappings = get_terraform_mappings()
-    implemented_providers = list(terraform_mappings.keys())
-
-    return implemented_providers
-
-
-def get_implemented_containers():
-    """Get the list of containers as defined in the 'container_mappings.yml' file
-
-    Args:
-        `None`
-    Returns:
-        `containers (list[str])`: The list of containers as defined in the `container_mappings.yml` file
-    """
-
-    return get_container_mappings(True)
-
-
 def get_implemented_redirectors():
     """Gets the list of redirectors as we have them implemented (these are implemented in Ansible)
 
@@ -189,17 +159,17 @@ def get_container_mappings(simple_list=True):
         `mappings (list[str | dict])`: List containing the configuration as a dict or list
     """
 
-    with open('./configurations/container_mappings.yml', 'r') as mappings:
-        # Parse the yaml and set the proper values
-        parsed_yaml = yaml.safe_load(mappings)
+    mappings = Path('./configurations/container_mappings.yml').read_text()
+    # Parse the yaml and set the proper values
+    parsed_yaml = yaml.safe_load(mappings)
 
-        if simple_list:
-            return parsed_yaml["services"].keys()
+    if simple_list:
+        return parsed_yaml["services"].keys()
 
-        return parsed_yaml 
+    return parsed_yaml 
 
 
-def get_terraform_mappings():
+def get_terraform_mappings(simple_list=False, type='all'):
     """Get the Terraform Mapping configuration file that will be used to build and remediate differences across the various providers
     
     Args: 
@@ -208,9 +178,16 @@ def get_terraform_mappings():
         `mappings (dict)`: Dictionary containing the configuration
     """
 
-    with open('./configurations/terraform_mappings.yml', 'r') as mappings:
-        # Parse the yaml and set the proper values
-        parsed_yaml = yaml.safe_load(mappings)
+    if type == 'all':
+        """"""
+    elif type == 'registrar':
+        """"""
+    elif type == '':
+        """"""
+
+    mappings = Path('./configurations/terraform_mappings.yml').read_text()
+    # Parse the yaml and set the proper values
+    parsed_yaml = yaml.safe_load(mappings)
     
     return parsed_yaml
 
@@ -296,17 +273,6 @@ def map_values(ctx_obj, json_data):
         ip_reference = terraform_mappings[current_provider]['server']['ip_reference']
         matching_resource.public_ip = resource_values[ip_reference]
 
-    return
-
-def build_resource_pickle(ctx_obj):
-    """Build a list of the categorization servers and the domain they are categorizing
-    Takes the click context object
-    Returns nothing
-    """
-
-    pickle_obj = pickle.dumps(ctx_obj['resources'])
-    resources_pickle_file = ctx_obj['op_directory'].joinpath('resources.pickle')
-    resources_pickle_file.write_bytes(pickle_obj)
 
 def build_resource_domain_map(protocol, domain):
     """Helper class to build out the proper Domain objects needed for the specified protocol
@@ -379,7 +345,7 @@ def build_plan(ctx_obj):
                 for record in registrar.domain_records:
                     dns_record = f'{hosted_zone}:{record.record_type}:{record.subdomain}'
                     if dns_record in dns_records:
-                        utils.log_error('Duplicate DNS Records found!')
+                        LogHandler.critical('Duplicate DNS Records found!')
                     jinja_vars = { 'resource': resource.__dict__, **registrar.__dict__, 'record': record.__dict__ }
                     plan += jinja_handler.get_and_render_template(record.terraform_resource_path, jinja_vars) + '\n\n'
                     dns_records.add(dns_record)
@@ -394,19 +360,8 @@ def get_operation_ssh_key_pair(ctx_obj):
     Returns the byte string of the SSH key
     """
 
-    pub_file = open(str(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key.pub')), "rb")
-    pub_byte = pub_file.read(1)
-    public_key = b''
-    while pub_byte:
-        public_key += pub_byte
-        pub_byte = pub_file.read(1)
-
-    priv_file = open(str(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key')), "rb")
-    priv_byte = priv_file.read(1)
-    private_key = b''
-    while priv_byte:
-        private_key += priv_byte
-        priv_byte = priv_file.read(1)
+    public_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key.pub')).read_bytes()
+    private_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key')).read_bytes()
     
     return public_key, private_key
 

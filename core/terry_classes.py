@@ -1,5 +1,7 @@
+import base64
 from dataclasses import dataclass
 from hashlib import sha256
+import hashlib
 from pathlib import Path
 
 import yaml
@@ -14,51 +16,8 @@ BUILD_UUID = ''
 # Parent Terraform, Ansible, & Container Classes
 #################################################################################################################
 
-class YAMLSerializable:
-    """Base class for representing a YAML serializable object"""
-
-    def __init__(self):
-        self.uuid = ''
-
-    def __hacked_hash__(self, build_uuid):
-        """A hacked together implementation of the __hash__ function"""
-        self.build_uuid = build_uuid
-        self_yaml = self.to_yaml()
-        self_yaml = self_yaml.encode('utf-8')
-        self_sha256 = sha256(self_yaml).hexdigest()
-
-        self.uuid = self_sha256
-        return self_sha256
-
-    def to_yaml(self):
-        """Convert the object to YAML"""
-        self_dict = self.to_dict()
-        return yaml.safe_dump(self_dict)
-
-    def to_dict(self):
-        """Convert the object to a dict"""
-
-        def check_unserializable_obj(obj):
-            """Check if the object is unserializable"""
-            if isinstance(obj, Path):
-                return str(value.absolute())
-            elif isinstance(obj, YAMLSerializable):
-                return obj.to_dict()
-            return value
-    
-        self_dict = vars(self)
-        for key, value in self_dict.items():
-            # If a list, loop over the list, checking each element if it is unserializable
-            if isinstance(value, list):
-                for sub_value in value:
-                    sub_value = check_unserializable_obj(sub_value)
-            self_dict[key] = check_unserializable_obj(value)
-        
-        return self_dict
-
-
 @dataclass 
-class TerraformObject(YAMLSerializable):
+class TerraformObject:
     """Base class for all things Terraform"""
 
     provider: str
@@ -67,8 +26,6 @@ class TerraformObject(YAMLSerializable):
     error_on_missing_resource_file: bool = True
 
     def __post_init__(self):
-        YAMLSerializable.__init__(self)
-
         inferred_path = f'./templates/terraform/resources/{self.provider}/{self.infrastructure_type}.tf.j2'
         path = Path(inferred_path)
         if path.exists():
@@ -77,11 +34,11 @@ class TerraformObject(YAMLSerializable):
             raise FileNotFoundError(f'File not found at {inferred_path}')
 
 
-class AnsibleControlledObject(YAMLSerializable):
+class AnsibleControlledObject:
     """Base class for representing an Ansible Controlled Resource"""
 
     def __init__(self):
-        YAMLSerializable.__init__(self)
+        pass
 
     def prepare_object_for_ansible(self):
         """Take the Child AnsibleControlled Object and extract the data needed to write an inventory that the playbooks can reference
@@ -144,17 +101,15 @@ class Container(AnsibleControlledObject):
         # Default Values
         self.required_args = {}
         self.container_config = {}
-  
-        self.__base_error_message = f'Container Error ({self.name}):'
 
-        # Get the provider mappings
+        # Get the container mappings
         from utils import get_container_mappings
         parsed_yaml = get_container_mappings(False)
         services = parsed_yaml['services']
         self.container_config = services.get(self.name)
 
         if not self.container_config:
-            LogHandler.critical(f'{self.__base_error_message} No container configutation found in container mappings YAML')
+            LogHandler.critical(f'Container Error ({self.name}): No container configutation found in container mappings YAML')
 
         # Set the core ansible vars
         self.core_playbook_vars = {
@@ -176,6 +131,18 @@ class Container(AnsibleControlledObject):
             env_var = check_for_required_value(ctx, req_arg)
             self.required_args[env_var.name] = env_var.get()
 
+    def to_dict(self):
+        self_dict = {
+            'name': self.name,
+            **self.required_args
+        }
+
+        return self_dict
+    
+    @classmethod
+    def from_dict(self, dict):
+        return Container(dict['name'])
+
 
 #################################################################################################################
 # Actual Terraform Objects
@@ -193,15 +160,13 @@ class Provider(TerraformObject):
         provider_config = {}
 
     def __post_init__(self):
-        self.__base_error_message = f'Provider Error ({self.name}):'
-
         # Get the provider mappings
         from utils import get_terraform_mappings
         parsed_yaml = get_terraform_mappings()
         self.provider_config = parsed_yaml.get(self.name)
 
         if not self.provider_config:
-            LogHandler.critical(f'{self.__base_error_message} No provider configutation found in terraform mappings YAML')
+            LogHandler.critical(f'Provider Error ({self.name}): No provider configutation found in terraform mappings YAML')
         
     def validate(self, ctx):
         # Get the required args from config
@@ -216,16 +181,50 @@ class Provider(TerraformObject):
             from utils import check_for_required_value
             env_var = check_for_required_value(ctx, req_arg)
             self.required_args[env_var.name] = env_var.get()
+    
+    def to_dict(self):
+        self_dict = {
+            'name': self.name,
+            'source': self.source,
+            'version': self.version
+        }
+
+        return self_dict
+
+    @classmethod
+    def from_dict(self, dict):
+        return Provider(dict['name'], dict['source'], dict['version'])
 
 
 class SSHKey(TerraformObject):
     """Base class for representing an ssh key"""
 
-    def __init__(self, provider, ssh_key_name, ssh_pub_key=None):
-        self.ssh_key_name = ssh_key_name
-        self.ssh_pub_key = ssh_pub_key
+    def __init__(self, provider, name, public_key=None, private_key=None):
+        self.name = name
+        self.public_key = public_key
+        self.private_key = private_key
 
         TerraformObject.__init__(self, provider, 'ssh_key')
+
+    def get_fingerprint(self):
+        stripped_key = self.public_key.strip()
+        split_key = stripped_key.split()[1]
+        base64_key = base64.b64decode(split_key.encode('ascii'))
+        fp_plain = hashlib.md5(base64_key).hexdigest()
+        return ':'.join(a+b for a,b in zip(fp_plain[::2], fp_plain[1::2]))
+
+    def to_dict(self):
+        self_dict = {
+            'name': self.name,
+            'public_key': self.public_key,
+            'private_key': self.private_key
+        }
+
+        return self_dict
+
+    @classmethod
+    def from_dict(self, dict):
+        return SSHKey(dict['name'], dict['public_key'], dict['private_key'])
 
 
 class Domain(TerraformObject):
@@ -248,6 +247,18 @@ class Domain(TerraformObject):
         # Parse out the subdomain
         full_subdomain = '.'.join(split_domain[:split_domain_length - 2])
         self.domain_records.append(DomainRecord(self.provider, full_subdomain, 'A'))
+
+    def to_dict(self):
+        self_dict = {
+            'domain': self.domain,
+            'provider': self.provider
+        }
+
+        return self_dict
+
+    @classmethod
+    def from_dict(self, dict):
+        return Domain(dict['domain'], dict['provider'])
     
 
 

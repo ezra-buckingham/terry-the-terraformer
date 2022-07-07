@@ -25,8 +25,10 @@ And not to mention all the people in BloodHound slack that I pestered for gettin
 
 There are known issues / quirks to Terry. Here are some of the ones I have identified:
 
-* Logging errors will NOT print the stack trace
 * No central managment of wildcard Certs
+* No validation of credentials on destroy
+* Lack of checking how many IP addresses are available in the Nebula subnet
+* Resource naming is not consistent and they need to be given the need for PTR records for SMTP (for the future)
 * UFW rules to containers must run both `ufw allow` and `ufw route allow` to allow ufw to manage the docker routes
 
 ## What's next?
