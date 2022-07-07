@@ -335,6 +335,9 @@ class Server(AnsibleControlledObject, TerraformObject):
             'provider': self.provider
         }
         
+#################################################################################################################
+# Server Types
+#################################################################################################################
 
 class Bare(Server):
     """Class for representing a bare server, without any custom config"""
@@ -368,12 +371,52 @@ class Redirector(Server):
 
         Server.__init__(self, name, provider, 'redirector', domain_map, [])
 
+    @classmethod
+    def from_shorthand_notation(self, shorthand):
+         # Parse out the defined types
+        redirector_definition = shorthand.split(':')
+
+        # Check provided length
+        if len(redirector_definition) < 2:
+            LogHandler.critical(f'Invalid redirector definition provider provided: "{redirector}". Please use one of the proper format of "<provider>:<protocol>:<domain>:<registrar>" for the redirector.')
+
+        redirector_provider = redirector_definition[0]
+
+        # Check if provider is in our list of implemented providers
+        from utils import get_terraform_mappings
+        if redirector_provider not in get_terraform_mappings(simple_list=True):
+            LogHandler.critical(f'Invalid redirector provider provided: "{redirector_provider}". Please use one of the implemented redirectors: {get_terraform_mappings(simple_list=True)}')
+
+        proto = redirector_definition[1]
+        redirector_name = f'{name}-{proto}-{create_resource_name("redir")}'
+        
+        # Check if protocol supported as given by the user
+        from utils import get_implemented_redirectors
+        if proto not in get_implemented_redirectors():
+            LogHandler.critical(f'Invalid redirector type provided: "{proto}". Please use one of the implemented redirectors: {get_implemented_redirectors()}')
+
+        # Try parsing out a domain as provided
+        redirector_domain_map = []
+        if len(redirector_definition) >= 3:
+            redirector_domain = Domain(redirector_definition[2], redirector_definition[3])
+            redirector_domain = utils.build_resource_domain_map(proto, redirector_domain)
+            redirector_domain_map.append(redirector_domain)
+        else:
+            if len(redirector_definition) == 2:
+                LogHandler.warn(f'Redirector provided without domain: "{redirector}". Building without any domain.')
+            else:
+                LogHandler.error(f'Invalid redirector provided: "{redirector}". Please make sure you define EITHER only the "<provider>:<protocol>" OR the "<provider>:<protocol>:<domain>:<registrar>"')
+
+        redirector = Redirector(redirector_name, redirector_provider, redirector_domain_map, proto, None)
+        resources.append(redirector)
+
 
 class Teamserver(Server):
     """Class for Teamservers, the piece of infrastructure running command and control software."""
 
     def __init__(self, name, provider, domain_map, containers):
-        self.redirectors = []
+        if domain_map and len(domain_map) > 0:
+            LogHandler.warn('Domain provided for a Teamserver, this is not reccomended, but you do you.')
 
         Server.__init__(self, name, provider, 'teamserver', domain_map, containers)
 

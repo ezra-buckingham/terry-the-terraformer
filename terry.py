@@ -1,10 +1,8 @@
 #!/usr/bin/python3
-from itertools import chain
 import json
 import logging
 import re
 import sys
-import uuid
 import click
 import yaml
 import traceback
@@ -12,25 +10,24 @@ from pathlib import Path
 
 # Local Imports
 from core import *
-import utils
 
 @click.pass_obj
 def build_infrastructure(ctx_obj):
     # Load the public key so we can build the ssh key resources later
-    public_key, private_key = utils.get_operation_ssh_key_pair(ctx_obj)
+    public_key, private_key = get_operation_ssh_key_pair(ctx_obj)
     ctx_obj['ssh_pub_key'] = public_key
 
     # Read in the Terraform mapping and give it to the click object
-    ctx_obj['terraform_mappings'] = utils.get_terraform_mappings()
+    ctx_obj['terraform_mappings'] = get_terraform_mappings()
 
     for resource in ctx_obj['all_resources']:
         resource.containers[0].__dict__()
 
-    utils.build_ansible_inventory(ctx_obj)
+    build_ansible_inventory(ctx_obj)
 
     # Create the terraform plan and build it 
     LogHandler.info('Building Terraform plan')
-    plan = utils.build_plan(ctx_obj)
+    plan = build_plan(ctx_obj)
     plan_file = Path(ctx_obj['op_directory']).joinpath(f'terraform/{ ctx_obj["operation"] }_plan.tf')
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
@@ -51,7 +48,7 @@ def build_infrastructure(ctx_obj):
         results = json.loads(stdout)['values']['root_module']['resources']
 
     # Map the results from terraform.show() results back into the resource objects
-    utils.map_values(ctx_obj, results)
+    map_values(ctx_obj, results)
 
     # Configure Nebula
     if not ctx_obj['no_nebula']:
@@ -69,7 +66,7 @@ def build_infrastructure(ctx_obj):
 
     # Create the pickle file for the built resources
     LogHandler.debug('Building Ansible inventory')  
-    utils.build_ansible_inventory(ctx_obj)
+    build_ansible_inventory(ctx_obj)
 
     # Run all the Prep playbooks
     root_playbook_location = '../../../playbooks'
@@ -83,7 +80,7 @@ def build_infrastructure(ctx_obj):
     ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
     
     LogHandler.info('Ansible setup complete')
-    ctx_obj['end_time'] = utils.get_formatted_time()
+    ctx_obj['end_time'] = get_formatted_time()
     ctx_obj['slack_handler'].send_success(ctx_obj)
 
 
@@ -133,8 +130,8 @@ def validate_build_request(ctx):
 
                 # Now get the provider from the user
                 provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
-                while provider not in utils.get_implemented_providers(simple_list=True):
-                    LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {utils.get_implemented_providers(simple_list=True)}', is_fatal=False)
+                while provider not in get_terraform_mappings(simple_list=True):
+                    LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {get_terraform_mappings(simple_list=True)}', is_fatal=False)
                     provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
 
                 lighthouse = Lighthouse(lighthouse_name, provider, None)
@@ -166,7 +163,7 @@ def validate_build_request(ctx):
         # Check to see if we have a domain map and that we have valid registars
         if resource.domain_map:
             for domain in resource.domain_map:
-                registrars = utils.get_terraform_mappings(simple_list=True, type='registrar')
+                registrars = get_terraform_mappings(simple_list=True, type='registrar')
                 if not domain.provider in registrars:
                     LogHandler.critical(f'Registrar of {domain.provider} not implemented. Please implement it and rerun or change the registrar.')
                 else: 
@@ -179,9 +176,9 @@ def validate_build_request(ctx):
                 if not container_registry_credentials_checked:
                     LogHandler.debug('Containers found in build, checking for container registry credentials now')
                     # First Validate we were given registry creds
-                    utils.check_for_required_value(ctx.obj, 'container_registry')
-                    utils.check_for_required_value(ctx.obj, 'container_registry_username')
-                    utils.check_for_required_value(ctx.obj, 'container_registry_password')
+                    check_for_required_value(ctx.obj, 'container_registry')
+                    check_for_required_value(ctx.obj, 'container_registry_username')
+                    check_for_required_value(ctx.obj, 'container_registry_password')
                     container_registry_credentials_checked = True
                 # Now validate the actual container runtime args needed
                 container.validate(ctx.obj)
@@ -215,7 +212,7 @@ def create_resource_name(ctx_obj, type):
 @click.option('-v', '--verbose', is_flag=True, default=False, help='''
     Verbose output from Terry (does not change what is logged in the log file)
     ''')
-    
+
 @click.option('-l', '--log_file', default='./log_terry.log', type=Path, help='''
     Location to write log file to
     ''')
@@ -292,7 +289,7 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     # Create a context (ctx) object (obj) for Click to pass around that stores relevant information
     # Only add the things that come from the config file, all the other values will come from the params
     ctx.ensure_object(dict)
-    ctx.obj['start_time'] = utils.get_formatted_time()
+    ctx.obj['start_time'] = get_formatted_time()
     ctx.obj['command_run'] = command_run
     ctx.obj['project_directory'] = Path(config_contents['global']['project_directory'])
     ctx.obj['config'] = config  # Path to configuration file
@@ -329,7 +326,7 @@ def destroy(ctx_obj, recursive):
         if recursive:
             if Path(ctx_obj['op_directory']).exists():
                 LogHandler.warn(f'Destroying all files associated with "{ ctx_obj["operation"] }"')
-                utils.remove_directory_recursively(ctx_obj["op_directory"])
+                remove_directory_recursively(ctx_obj["op_directory"])
                 LogHandler.info('File destruction complete')
             else:
                 LogHandler.critical(f'No files or folder found for "{ ctx_obj["operation"] }"', True)
@@ -338,70 +335,64 @@ def destroy(ctx_obj, recursive):
 
 
 @cli.group(name='create', chain=True)
-@click.pass_obj
-def create(ctx_obj):
+@click.pass_context
+def create(ctx):
     """Create a new deployment"""
 
-    LogHandler.info(f'Creating the "{ ctx_obj["operation"] }" plan')
+    LogHandler.info(f'Creating the "{ ctx.obj["operation"] }" plan')
 
     # Prepare all required handlers
     prepare_handlers()
 
-    operation_name = ctx_obj["operation"]
-    build_config_file = Path(ctx_obj['op_directory']).joinpath('.terry/build_config.yml')
+    operation_name = ctx.obj["operation"]
+    build_config_file = Path(ctx.obj['op_directory']).joinpath('.terry/build_config.yml')
     build_uuid = ''
 
     # Check for certificates directory
-    certificates_directory = Path(ctx_obj['op_directory']).joinpath('.certificates')
-    if not certificates_directory.exists(parents=True):
+    certificates_directory = Path(ctx.obj['op_directory']).joinpath('.certificates')
+    if not certificates_directory.exists():
         LogHandler.warn('Certificates directory not found in project directory, creating that now...')
-        certificates_directory.mkdir()
+        certificates_directory.mkdir(parents=True)
 
-    # Check that the Operation Directory exists, along with all required other files
-    if not Path(ctx_obj['op_directory']).exists():
-        LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable) now...')
-        Path(ctx_obj['op_directory']).mkdir(parents=True)
+    # If the operation directory doesn't exist, create the skeleton for it as well as all other resources required
+    if not Path(ctx.obj['op_directory']).exists():
+        LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable)')
+        Path(ctx.obj['op_directory']).mkdir()
         # Does not account for situations where op_directory exists but these children do not
-        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
-            Path(ctx_obj['op_directory']).joinpath(path).mkdir(parents=True)
+        for path in ['terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
+            Path(ctx.obj['op_directory']).joinpath(path).mkdir(parents=True)
 
         # Generate the SSH Keys and write them to disk
-        public_key, private_key = utils.generate_ssh_key()
-
-        # Write the private ssh key to the folder
-        file_path = operation_name + '_key'
-        key_file = Path(ctx_obj['op_directory']).joinpath(file_path)
-        pub_key_file = Path(ctx_obj['op_directory']).joinpath(file_path + '.pub')
-
-        # Write the keys and change perms
+        public_key, private_key = generate_ssh_key()
+        key_file = Path(ctx.obj['op_directory']).joinpath(f'{operation_name}_key')
+        pub_key_file = Path(ctx.obj['op_directory']).joinpath(f'{operation_name}_key.pub')
         pub_key_file.write_bytes(public_key)
         key_file.write_bytes(private_key)
         os.chmod(str(key_file), 0o700)
 
-        # Create the config for the build
-        config = { 'uuid': str(uuid.uuid4()) }
-        build_config_yaml = yaml.safe_dump(config)
-        build_config_file.write_text(build_config_yaml)
-
         # Check to see if any remote configurations were defined
-        for remote_config in ctx_obj["ansible_configuration"]["remote"]:
+        for remote_config in ctx.obj["ansible_configuration"]["remote"]:
+            if not remote_config["name"] or len(remote_config["name"]) == 0:
+                LogHandler.error('Found blank entry for a remote configuration in the config file, skipping blank entry...')
+                continue
+
             LogHandler.info(f'Found name of "{ remote_config["name"] }" for a remote configuration, loading it now...')
             remote_config = RemoteConfigurationHandler(remote_config["name"], remote_config["repo_url"], remote_config["username"], remote_config["personal_access_token"])
 
             # Write out the configuration to the op_directory
-            configuration_location = Path(ctx_obj['op_directory']).joinpath(f'ansible/extra_vars/{ remote_config.configuration_name }.yml')
+            configuration_location = Path(ctx.obj['op_directory']).joinpath(f'ansible/extra_vars/{ remote_config.configuration_name }.yml')
             LogHandler.debug(f'Writing out "{ remote_config.configuration_name }" remote configuration to "{ configuration_location }"')
-            yaml_contents = yaml.safe_dump(remote_config.configuration)
+            yaml_contents = yaml.dump(remote_config.configuration)
             configuration_location.write_text(yaml_contents)
 
     # If the directory exists, we must check the flags supplied to see what Terry should do
     else: 
-        base_message = f'A plan with the name "{ operation_name }" already exists in "{ ctx_obj["op_directory"] }"'
-        if ctx_obj['force']:
+        base_message = f'A plan with the name "{ operation_name }" already exists in "{ ctx.obj["op_directory"] }"'
+        if ctx.obj['force']:
             LogHandler.warn(f'{base_message}. Continuing since "-f" / "--force" was supplied.')
         else:
-            LogHandler.critical(f'{base_message}. Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag.')
-    
+            LogHandler.error(f'{base_message}. Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag.')
+
     # Load the build config
     if build_config_file.exists():
         build_config = build_config_file.read_text()
@@ -409,6 +400,8 @@ def create(ctx_obj):
         build_uuid = build_config_yaml['uuid']
     else:
         LogHandler.warn(f'No build configuration found for "{operation_name}", it was likely built with an older version of Terry. Some features may not be available due to this.')
+    
+    ctx.obj['commands'] = list(ctx.command.commands)
 
 
 @cli.group(name='add')
@@ -426,10 +419,10 @@ def reconfigure():
 
 
 @click.command(name='server')
-@click.option('--provider', '-p', required=True, type=click.Choice(utils.get_terraform_mappings(simple_list=True)), help='''
+@click.option('--provider', '-p', required=True, type=click.Choice(get_terraform_mappings(simple_list=True)), help='''
     The cloud/infrastructure provider to use when creating the server
     ''')
-@click.option('--type', '-t', required=True, type=click.Choice(utils.get_implemented_server_types()), help='''
+@click.option('--type', '-t', required=True, type=click.Choice(get_implemented_server_types()), help='''
     The type of server to create
     ''')
 @click.option('--container', '-cT', type=str, multiple=True, help='''
@@ -445,7 +438,8 @@ def reconfigure():
 @click.option('--domain', '-d', multiple=True, type=str, help='''
     Domain and registrar to use in creation of an A record for the resource formatted as "<domain>:<registrar>" (Example: domain example.com with registrar aws should be "example.com:aws)"
     ''')
-def server(ctx, provider, type, redirector_type, redirect_to, domain, container):
+@click.pass_obj
+def server(ctx_obj, provider, type, redirector_type, redirect_to, domain, container):
     """Create a server resource"""
 
     # The name is operationname_lighthouseN, where N is number of existing redirectors + 1 and it must be unique across all deployments since some APIs will error out if they aren't unique (even in different deployments)
@@ -453,7 +447,6 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
     resources = []
 
     # Build the redirector objects
-    redirectors = []
     for redirector in redirector_type:
         # Parse out the defined types
         redirector_definition = redirector.split(':')
@@ -465,21 +458,21 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
         redirector_provider = redirector_definition[0]
 
         # Check if provider is in our list of implemented providers
-        if redirector_provider not in utils.get_terraform_mappings(simple_list=True):
-            LogHandler.critical(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {utils.get_implemented_providers(simple_list=True)}')
+        if redirector_provider not in get_terraform_mappings(simple_list=True):
+            LogHandler.critical(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {get_implemented_providers(simple_list=True)}')
 
         proto = redirector_definition[1]
         redirector_name = f'{name}-{proto}-{create_resource_name("redir")}'
         
         # Check if protocol supported as given by the user
-        if proto not in utils.get_implemented_redirectors():
-            LogHandler.critical(f'Invalid redirector type provided: "{proto}". Please use one of the implemented redirectors: {utils.get_implemented_redirectors()}')
+        if proto not in get_implemented_redirectors():
+            LogHandler.critical(f'Invalid redirector type provided: "{proto}". Please use one of the implemented redirectors: {get_implemented_redirectors()}')
 
         # Try parsing out a domain as provided
         redirector_domain_map = []
         if len(redirector_definition) >= 3:
             redirector_domain = Domain(redirector_definition[2], redirector_definition[3])
-            redirector_domain = utils.build_resource_domain_map(proto, redirector_domain)
+            redirector_domain = build_resource_domain_map(proto, redirector_domain)
             redirector_domain_map.append(redirector_domain)
         else:
             if len(redirector_definition) == 2:
@@ -488,17 +481,16 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
                 LogHandler.error(f'Invalid redirector provided: "{redirector}". Please make sure you define EITHER only the "<provider>:<protocol>" OR the "<provider>:<protocol>:<domain>:<registrar>"')
 
         redirector = Redirector(redirector_name, redirector_provider, redirector_domain_map, proto, None)
-        redirectors.append(redirector)
+        resources.append(redirector)
         
     # Build the domain object
     domain_map = []
-    if domain:
-        for item in domain:
-            item = item.split(':')
-            if len(item) != 2: 
-                LogHandler.critical(f'Domain expects be formated as "<domain>:<registrar>" (example: "example.com:aws")')
-            domain = Domain(item[0], item[1])
-            domain_map.append(domain)
+    for item in domain:
+        item = item.split(':')
+        if len(item) != 2: 
+            LogHandler.critical(f'Domain expects be formated as "<domain>:<registrar>" (example: "example.com:aws")')
+        domain = Domain(item[0], item[1])
+        domain_map.append(domain)
 
     # Build the container objects
     containers = [Container(x) for x in list(container)]
@@ -506,8 +498,6 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
     # Build the server object
     if type == 'teamserver':
         server = Teamserver(name, provider, domain_map, containers)
-        if domain:
-            LogHandler.warn('Domain provided for a Teamserver without any redirectors specified')
     elif type == 'redirector':
         server = Redirector(name, provider, domain_map, redirector_type, redirect_to)
     elif type == 'categorize':
@@ -520,28 +510,30 @@ def server(ctx, provider, type, redirector_type, redirect_to, domain, container)
         LogHandler.critical(f'Got unknown server type: "{type}"')
 
     # Provide the server with the redirectors and append to build
-    server.redirectors = redirectors
     resources.append(server)
-    ctx.obj['resources'] += resources
-    ctx.obj['all_resources'] += resources + redirectors
+    ctx_obj['resources'] += resources
+    ctx_obj['all_resources'] += resources
 
     # If we have processed all the commands, pass along to next function
-    ctx.obj['commands'].pop()
-    if not ctx.obj['commands']:
+    ctx_obj['commands'].pop()
+    if not ctx_obj['commands']:
         try:
             validate_build_request()
-            build_infrastructure(ctx.obj)
+            build_infrastructure()
         except Exception as e:
             message = f"Some exception occurred in the execution of Terry. Please review the logs."
-            if not ctx.obj['quiet'] and ctx.obj['slack_webhook_url']:
-                slack_handler = SlackHandler(ctx.obj['slack_webhook_url'])
-                slack_handler.send_error(message)
+            ctx_obj['slack_handler'].send_error(message)
             message += '\n' + traceback.format_exc()
             LogHandler.critical(message)
 
 
 if __name__ == "__main__":
+    # Add the server subcommands to create and add groups
     create.add_command(server)
     add.add_command(server)
+
+    # Run the CLI entrypoint
     cli()
+
+    # Log the completion
     LogHandler.info('Terry run complete! Enjoy the tools you tool!')

@@ -1,11 +1,8 @@
 from json import JSONDecodeError
 from pathlib import Path
 from python_terraform import *
-from dataclasses import dataclass
-from hashlib import sha256
-from shutil import which
-from core.binary_handler import BinaryHandler
 
+from core.binary_handler import BinaryHandler
 from core.log_handler import LogHandler
 
 
