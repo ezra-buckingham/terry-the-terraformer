@@ -1,10 +1,7 @@
 import logging
 import click
 
-
 logger = logging.getLogger()
-VERBOSE_LOGGING = True
-
 
 class LogHandler:
 
@@ -23,7 +20,7 @@ class LogHandler:
 
 
     @classmethod
-    def get_input(self, message):
+    def get_input(self, message, hide_input=False):
         """Prompts the user for input
 
         Args:
@@ -31,9 +28,11 @@ class LogHandler:
         Returns:
             `result (str)`: Result from the user
         """
-
-        result = click.prompt(f'[?] {message}')
+        if hide_input:
+            message += '(Input will be hidden)'
+        result = click.prompt(f'[?] {message}', hide_input=hide_input)
         return result
+
 
     @classmethod
     def debug(self, message):
@@ -45,11 +44,12 @@ class LogHandler:
             `None`
         """
 
-        global VERBOSE_LOGGING
+        from core import is_verbose_enabled
 
         logger.debug(message)
-        if VERBOSE_LOGGING:
+        if is_verbose_enabled():
             click.secho(f'[*] {message}', fg='blue')
+
 
     @classmethod
     def info(self, message):

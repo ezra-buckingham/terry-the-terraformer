@@ -1,9 +1,8 @@
-import os
+from pydoc import cli
 import random
+import click
 import yaml
 
-from shutil import which
-from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
 from cryptography.hazmat.primitives import serialization as crypto_serialization
@@ -20,11 +19,94 @@ from core.nebula_handler import NebulaHandler
 from core.remote_configuration_handler import RemoteConfigurationHandler
 from core.jinja_handler import JinjaHandler
 from core.slack_handler import SlackHandler
+from core.environment_variable_handler import EnvironmentVariableHandler
 
 
 #################################################################################################################
 # Helper & Core Functions of Terry
 #################################################################################################################
+
+@click.pass_context
+def prepare_handlers(ctx):
+    """Prepare all the handler objects for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']`)
+
+    Args:
+        `None`
+    Returns:
+        `None`
+    """
+
+    # Create a Terraform handler
+    terraform_path = ctx.obj['config_contents']['global']['terraform_path']
+    ctx.obj['terraform_handler'] = TerraformHandler(terraform_path, ctx.obj['op_directory'])
+
+    # Create the Slack Handler
+    slack_webhook_url =  ctx.obj['config_contents']['slack']['webhook_url']
+    ctx.obj['slack_handler'] = SlackHandler(slack_webhook_url, ctx.obj['quiet'])
+    
+    # If not destroy, create all the other required handlers
+    if not ctx.command.name == 'destroy':
+        # Create the Ansible Handler
+        ansible_path = ctx.obj['config_contents']['global']['ansible_path']
+        ctx.obj['ansible_handler'] = AnsibleHandler(ansible_path, Path(ctx.obj['op_directory']).joinpath('ansible'))
+
+        # Create the Nebula Handler (if applicable)
+        if not ctx.obj['no_nebula']:
+            nebula_path = ctx.obj['config_contents']['global']['nebula_path']
+            ctx.obj['nebula_handler'] = NebulaHandler(nebula_path, ctx.obj['config_contents']['global']['nebula_subnet'], Path(ctx.obj['op_directory']).joinpath('nebula'))   
+
+
+@click.pass_obj
+def validate_credentials(ctx_obj, check_containers=True):
+    """Validate that we have credentials needed for the specified actions (all required providers will be given to the Click Context Object at `ctx.obj['required_providers']`)
+
+    Args:
+        `check_containers (bool)`: Should we check that we have credentials to deploy containers (not needed when destorying infra)
+    Returns:
+        `None`
+    """
+
+    required_providers = set()
+    container_registry_credentials_checked = False
+
+    for resource in ctx_obj['all_resources']:
+        required_providers.add(resource.provider)
+
+        if hasattr(resource, 'containers') and len(resource.containers) and check_containers:
+            for container in resource.containers:
+                # Check if we have already looked for container registry creds
+                if not container_registry_credentials_checked:
+                    LogHandler.debug('Containers found in build, checking for container registry credentials now')
+                    # First Validate we were given registry creds
+                    check_for_required_value(ctx_obj, 'container_registry')
+                    check_for_required_value(ctx_obj, 'container_registry_username', hide_input=True)
+                    check_for_required_value(ctx_obj, 'container_registry_password', hide_input=True)
+                    container_registry_credentials_checked = True
+                # Now validate the actual container runtime args needed
+                container.validate(ctx_obj)
+
+        if resource.domain_map:
+            for domain in resource.domain_map:
+                registrars = TerraformObject.get_terraform_mappings(simple_list=True, type='registrar')
+                if not domain.provider in registrars:
+                    LogHandler.critical(f'Registrar of {domain.provider} not implemented. Please implement it and rerun or change the registrar.')
+                else: 
+                    required_providers.add(domain.provider)
+
+    ctx_obj['required_providers'] = [ Provider(provider) for provider in required_providers ]
+    
+
+
+@click.pass_obj
+def create_resource_name(ctx_obj, type):
+    """Helper function to create a resource name"""
+    return type + (str([x.server_type for x in ctx_obj['all_resources']].count(type) + 1))
+
+
+@click.pass_obj
+def is_verbose_enabled(ctx_obj):
+    return ctx_obj['verbose']
+
 
 def get_formatted_time():
     """Get the time formatted in 24-hr local time
@@ -59,7 +141,7 @@ def find_dict_item(obj, key):
                 return item
 
 
-def check_for_required_value(ctx_obj, value_name):
+def check_for_required_value(ctx_obj, value_name, hide_input=False):
     """Will check for a specific value being an environment variable, then check the cli, then check the config file.
     If it finds nothing, it will prompt the user for the value.
 
@@ -89,7 +171,7 @@ def check_for_required_value(ctx_obj, value_name):
         LogHandler.debug(f'{value_name}: Value NOT FOUND in envionment variables')
                 
     # Third, check the config file for the argument needed for the provider
-    config_values = ctx_obj.get('config_values', {})
+    config_values = ctx_obj.get('config_contents', {})
     config_value = find_dict_item(config_values, value_name)
     if config_value:
         LogHandler.debug(f'{value_name}: Value FOUND in config file')
@@ -100,7 +182,7 @@ def check_for_required_value(ctx_obj, value_name):
                 
     # Lastly, prompt the user to give us the creds if not found
     if not required_value.get():
-        returned_value = LogHandler.get_input(f'Enter the {value_name}')
+        returned_value = LogHandler.get_input(f'Enter the {value_name}', hide_input=hide_input)
         required_value.set(returned_value)
         return returned_value
 
@@ -152,143 +234,6 @@ def get_implemented_server_types():
     return server_types
 
 
-def get_implemented_redirectors():
-    """Gets the list of redirectors as we have them implemented (these are implemented in Ansible)
-
-    Args:
-        `None`
-    Returns:
-        `redirector_types (list[str])`: The list of implemented redirector types
-    """
-
-    redirector_types = ['https', 'dns', 'custom']
-    return redirector_types
-
-
-def get_container_mappings(simple_list=True):
-    """Get the Container Mapping configuration file that will be used to build and deploy docker containers
-    
-    Args: 
-        `simple_list (boolean)`: (DEFAULT=True) Return just the list of containers in the config 
-    Returns:
-        `mappings (list[str | dict])`: List containing the configuration as a dict or list
-    """
-
-    mappings = Path('./configurations/container_mappings.yml').read_text()
-    # Parse the yaml and set the proper values
-    parsed_yaml = yaml.safe_load(mappings)
-
-    if simple_list:
-        return parsed_yaml["services"].keys()
-
-    return parsed_yaml 
-
-
-def get_terraform_mappings(simple_list=False, type='all'):
-    """Get the Terraform Mapping configuration file that will be used to build and remediate differences across the various providers
-    
-    Args: 
-        `None`
-    Returns:
-        `mappings (dict)`: Dictionary containing the configuration
-    """
-
-    if type == 'all':
-        """"""
-    elif type == 'registrar':
-        """"""
-    elif type == '':
-        """"""
-
-    mappings = Path('./configurations/terraform_mappings.yml').read_text()
-    # Parse the yaml and set the proper values
-    parsed_yaml = yaml.safe_load(mappings)
-    
-    return parsed_yaml
-
-
-def build_ansible_inventory(ctx_obj):
-    # We want to build a file so that ansible could be independently run outside of terry
-    # as opposed to passing a dict to ansible_runner
-
-    server_types = get_implemented_server_types()
-    inventory = {inventory: {'hosts': {}} for inventory in server_types}
-
-    for resource in ctx_obj['all_resources']:
-        inventory[resource.server_type]['hosts'][resource.public_ip] = resource.prepare_object_for_ansible()
-        
-    # Ansible will lock this file at times, so we need to try to write the changes, but may not be able to
-    try:
-        # Create the Global Vars to pass to ansible
-        global_vars = ctx_obj["ansible_configuration"]["global"]
-        global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
-        global_vars["nebula"] = not ctx_obj['no_nebula']
-        # If installing Nebula, give the additional vars needed for configuring it on the hosts
-        if global_vars["nebula"]:
-            global_vars["lighthouse_public_ip"] = ctx_obj['lighthouse_public_ip']
-            global_vars["lighthouse_nebula_ip"] = ctx_obj['lighthouse_nebula_ip']
-
-        # Give Ansible the default users from the configuration file
-        default_users = ctx_obj["ansible_configuration"]["default_users"]
-        global_vars['team'] = default_users
-
-        # Check if we have extra_vars to put into the inventory
-        path_to_extra_vars = ctx_obj["op_directory"].joinpath('ansible/extra_vars')
-        yaml_files = list(path_to_extra_vars.glob('**/*.yml'))
-        for yaml_file in yaml_files:
-            # Open the file, parse it, and then spread it into the global vars
-            with yaml_file.open() as open_yaml_file:
-                file_contents = open_yaml_file.read()
-                yaml_contents = yaml.safe_load(file_contents)
-                global_vars = {
-                    **yaml_contents,
-                    **global_vars
-                }
-            
-        # Build the dictionary and write it to disk
-        ansible_inventory = {'all': { 'vars': global_vars, 'children': inventory }}
-        yaml_text = yaml.safe_dump(ansible_inventory)
-        ctx_obj['op_directory'].joinpath('ansible/inventory/hosts').write_text(yaml_text)
-    except PermissionError as e:
-        LogHandler.warn('There was a "PermissionError" while writing the Ansible inventory file')
-    
-    return inventory
-
-
-def map_values(ctx_obj, json_data):
-    """Map results from Terraform plan application back to class instances.
-    Takes the click context object dictionary and JSONified terraform.show() results.
-    Returns nothing (updates resource classes in place).
-    """
-
-    LogHandler.debug('Mapping Terraform state')
-
-    # Sort both lists by name to ensure same order
-    terraform_resources = sorted(json_data, key=lambda x: x['name']) 
-
-    # Get the terraform mappings so we know what keys to search for
-    terraform_mappings = get_terraform_mappings()
-
-    for resource in terraform_resources:
-        resource_values = resource['values']
-        matching_resource = [r for r in ctx_obj['all_resources'] if r.name == resource['name']]
-        
-        # Get the matching resource, if returned, else continue to next resource
-        if (len(matching_resource) > 0):
-            matching_resource = matching_resource[0]
-        else:
-            continue
-
-        # Need to extract the provider from the name returned in the JSON
-        current_provider_fqdn = resource['provider_name']
-        current_provider_fqdn = current_provider_fqdn.split('/')
-        current_provider = current_provider_fqdn[len(current_provider_fqdn) - 1]
-
-        # Get the ip_reference for the specific provider
-        ip_reference = terraform_mappings[current_provider]['server']['ip_reference']
-        matching_resource.public_ip = resource_values[ip_reference]
-
-
 def build_resource_domain_map(protocol, domain):
     """Helper class to build out the proper Domain objects needed for the specified protocol
 
@@ -297,8 +242,8 @@ def build_resource_domain_map(protocol, domain):
         `domain (Domain)`: Domain object in which to map records to
     """
 
-    if protocol not in get_implemented_redirectors():
-        LogHandler.critical(f'Invalid redirector type provided: "{protocol}". Please use one of the implemented redirectors: {get_implemented_redirectors()}')
+    if protocol not in Redirector.get_implemented_redirectors():
+        LogHandler.critical(f'Invalid redirector type provided: "{protocol}". Please use one of the implemented redirectors: {Redirector.get_implemented_redirectors()}')
 
     if protocol == 'dns':
         existing_record = domain.domain_records.pop()
@@ -310,65 +255,6 @@ def build_resource_domain_map(protocol, domain):
 
     return domain
 
-def build_plan(ctx_obj):
-    """Build the Terraform plan.
-    Takes the Click context object dictionary.
-    Returns a complete Terraform plan as a string.
-    Uses the utils.render_template function to render the Terraform plan based on
-    provider and resource templates.
-    """
-
-    plan = ''
-
-    jinja_handler = JinjaHandler(".")
-
-    # Start with adding the providers
-    plan += jinja_handler.get_and_render_template('./templates/terraform/provider.tf.j2', {'required_providers' : ctx_obj['required_providers']})+ '\n\n'
-    
-    # Track the resources that we don't want to duplicate
-    hosted_zones = set()
-    dns_records = set()
-    ssh_keys = set()
-
-    # Now prepare it all
-    for resource in ctx_obj["all_resources"]:
-
-        # Check if we have an SSH Key provisioned for that provider first
-        if resource.provider not in ssh_keys:
-            ssh_key_name = f'{ctx_obj["operation"]}_{resource.provider}_key'
-            ssh_key = SSHKey(resource.provider, ssh_key_name, ctx_obj['ssh_pub_key'])
-            plan += jinja_handler.get_and_render_template(ssh_key.terraform_resource_path, { **ssh_key.__dict__ } ) + '\n\n'
-            ssh_keys.add(resource.provider)
-
-        # Now prepare the resource
-        jinja_vars = { **vars(resource), **ctx_obj }
-        plan += jinja_handler.get_and_render_template(resource.terraform_resource_path, jinja_vars) + '\n\n'
-        
-        # If the resource has domain records, build those as well       
-        if hasattr(resource, 'domain_map') and resource.domain_map:
-            # Loop over the domains
-            for registrar in resource.domain_map:
-                # Check if the hosted zone exists already in the set
-                hosted_zone = f'{registrar.domain}:{registrar.provider}'
-                # If hosted zone already exists
-                if hosted_zone in hosted_zones:
-                    LogHandler.debug(f'Hosted domain zone for {hosted_zone} already built, only building single zone.')
-                else:
-                    jinja_vars = registrar.__dict__
-                    plan += jinja_handler.get_and_render_template(registrar.terraform_resource_path, jinja_vars) + '\n\n'
-                # Now loop over the records
-                for record in registrar.domain_records:
-                    dns_record = f'{hosted_zone}:{record.record_type}:{record.subdomain}'
-                    if dns_record in dns_records:
-                        LogHandler.critical('Duplicate DNS Records found!')
-                    jinja_vars = { 'resource': resource.__dict__, **registrar.__dict__, 'record': record.__dict__ }
-                    plan += jinja_handler.get_and_render_template(record.terraform_resource_path, jinja_vars) + '\n\n'
-                    dns_records.add(dns_record)
-                # Add the hosted zone
-                hosted_zones.add(hosted_zone)                    
-
-    return plan
-
 
 def get_operation_ssh_key_pair(ctx_obj):
     """Gets the SSH key that will be used for ansible (required because the generated key won't work for some reason, but reading it will???)
@@ -379,6 +265,7 @@ def get_operation_ssh_key_pair(ctx_obj):
     private_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key')).read_bytes()
     
     return public_key, private_key
+
 
 def generate_ssh_key():
     """Generate an SSH key if we want to dynamically generate keys for our deployments.
@@ -400,6 +287,7 @@ def generate_ssh_key():
         crypto_serialization.PublicFormat.OpenSSH
     )
     return public_key, private_key
+
 
 def get_common_subdomain(exclude=None):
     """Generate a random subdomain to use for infrastructure.

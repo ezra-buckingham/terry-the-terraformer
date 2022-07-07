@@ -1,8 +1,7 @@
 import base64
-from dataclasses import dataclass
-from hashlib import sha256
 import hashlib
 from pathlib import Path
+from uuid import uuid4
 
 import yaml
 
@@ -16,22 +15,43 @@ BUILD_UUID = ''
 # Parent Terraform, Ansible, & Container Classes
 #################################################################################################################
 
-@dataclass 
 class TerraformObject:
     """Base class for all things Terraform"""
 
-    provider: str
-    infrastructure_type: str
-    terraform_resource_path: object = None
-    error_on_missing_resource_file: bool = True
+    def __init__(self, provider, infrastructure_type, uuid=uuid4()):
+        self.provider = provider
+        self.infrastructure_type = infrastructure_type
+        self.uuid = str(uuid)
 
-    def __post_init__(self):
         inferred_path = f'./templates/terraform/resources/{self.provider}/{self.infrastructure_type}.tf.j2'
         path = Path(inferred_path)
         if path.exists():
             self.terraform_resource_path = path
         else:
             raise FileNotFoundError(f'File not found at {inferred_path}')
+
+    @classmethod
+    def get_terraform_mappings(self, simple_list=False, type='all'):
+        """Get the Terraform Mapping configuration file that will be used to build and remediate differences across the various providers
+        
+        Args: 
+            `None`
+        Returns:
+            `mappings (dict)`: Dictionary containing the configuration
+        """
+
+        if type == 'all':
+            """"""
+        elif type == 'registrar':
+            """"""
+        elif type == '':
+            """"""
+
+        mappings = Path('./configurations/terraform_mappings.yml').read_text()
+        # Parse the yaml and set the proper values
+        parsed_yaml = yaml.safe_load(mappings)
+        
+        return parsed_yaml
 
 
 class AnsibleControlledObject:
@@ -103,8 +123,7 @@ class Container(AnsibleControlledObject):
         self.container_config = {}
 
         # Get the container mappings
-        from utils import get_container_mappings
-        parsed_yaml = get_container_mappings(False)
+        parsed_yaml = Container.get_container_mappings(False)
         services = parsed_yaml['services']
         self.container_config = services.get(self.name)
 
@@ -117,7 +136,10 @@ class Container(AnsibleControlledObject):
             **self.required_args
         }
 
+
     def validate(self, ctx):
+        from core import check_for_required_value
+
         # Get the required args from config
         required_args = self.container_config.get('required_args', [])
 
@@ -127,9 +149,9 @@ class Container(AnsibleControlledObject):
         
         # Validate we have each arg
         for req_arg in required_args:
-            from utils import check_for_required_value
             env_var = check_for_required_value(ctx, req_arg)
             self.required_args[env_var.name] = env_var.get()
+
 
     def to_dict(self):
         self_dict = {
@@ -138,10 +160,31 @@ class Container(AnsibleControlledObject):
         }
 
         return self_dict
+
     
     @classmethod
     def from_dict(self, dict):
         return Container(dict['name'])
+
+
+    @classmethod
+    def get_container_mappings(self, simple_list=True):
+        """Get the Container Mapping configuration file that will be used to build and deploy docker containers
+        
+        Args: 
+            `simple_list (boolean)`: (DEFAULT=True) Return just the list of containers in the config 
+        Returns:
+            `mappings (list[str | dict])`: List containing the configuration as a dict or list
+        """
+
+        mappings = Path('./configurations/container_mappings.yml').read_text()
+        # Parse the yaml and set the proper values
+        parsed_yaml = yaml.safe_load(mappings)
+
+        if simple_list:
+            return parsed_yaml["services"].keys()
+
+        return parsed_yaml 
 
 
 #################################################################################################################
@@ -159,10 +202,7 @@ class Provider(TerraformObject):
         required_args = {}
         provider_config = {}
 
-    def __post_init__(self):
-        # Get the provider mappings
-        from utils import get_terraform_mappings
-        parsed_yaml = get_terraform_mappings()
+        parsed_yaml = TerraformObject.get_terraform_mappings()
         self.provider_config = parsed_yaml.get(self.name)
 
         if not self.provider_config:
@@ -200,6 +240,7 @@ class SSHKey(TerraformObject):
     """Base class for representing an ssh key"""
 
     def __init__(self, provider, name, public_key=None, private_key=None):
+        self.provider = provider
         self.name = name
         self.public_key = public_key
         self.private_key = private_key
@@ -278,7 +319,6 @@ class DomainRecord(TerraformObject):
 # Servers & Server Types
 #################################################################################################################
 
-@dataclass
 class Server(AnsibleControlledObject, TerraformObject):
     """Base class for representing servers"""
 
@@ -293,8 +333,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         AnsibleControlledObject.__init__(self)
 
         # Get the provider mappings
-        from utils import get_terraform_mappings
-        parsed_yaml = get_terraform_mappings()
+        parsed_yaml = TerraformObject.get_terraform_mappings()
         current_provider = parsed_yaml[self.provider]['server']
 
         # Set the values based on the data in the config
@@ -372,43 +411,49 @@ class Redirector(Server):
         Server.__init__(self, name, provider, 'redirector', domain_map, [])
 
     @classmethod
+    def get_implemented_redirectors(self):
+        redirector_types = ['https', 'dns', 'custom']
+        return redirector_types
+
+    @classmethod
     def from_shorthand_notation(self, shorthand):
-         # Parse out the defined types
+        # Import functions needed
+        from core import build_resource_domain_map, create_resource_name
+
+        # Parse out the defined types
         redirector_definition = shorthand.split(':')
+        provider = redirector_definition[0]
+        protocol = redirector_definition[1]
 
         # Check provided length
         if len(redirector_definition) < 2:
-            LogHandler.critical(f'Invalid redirector definition provider provided: "{redirector}". Please use one of the proper format of "<provider>:<protocol>:<domain>:<registrar>" for the redirector.')
-
-        redirector_provider = redirector_definition[0]
+            LogHandler.critical(f'Invalid redirector definition provider provided: "{shorthand}". Please use one of the proper format of "<provider>:<protocol>:<domain>:<registrar>" for the redirector.')
 
         # Check if provider is in our list of implemented providers
-        from utils import get_terraform_mappings
-        if redirector_provider not in get_terraform_mappings(simple_list=True):
-            LogHandler.critical(f'Invalid redirector provider provided: "{redirector_provider}". Please use one of the implemented redirectors: {get_terraform_mappings(simple_list=True)}')
-
-        proto = redirector_definition[1]
-        redirector_name = f'{name}-{proto}-{create_resource_name("redir")}'
+        if provider not in TerraformObject.get_terraform_mappings(simple_list=True):
+            LogHandler.critical(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {get_terraform_mappings(simple_list=True)}')
         
         # Check if protocol supported as given by the user
-        from utils import get_implemented_redirectors
-        if proto not in get_implemented_redirectors():
-            LogHandler.critical(f'Invalid redirector type provided: "{proto}". Please use one of the implemented redirectors: {get_implemented_redirectors()}')
+        if protocol not in self.get_implemented_redirectors():
+            LogHandler.critical(f'Invalid redirector type provided: "{protocol}". Please use one of the implemented redirectors: {self.get_implemented_redirectors()}')
 
         # Try parsing out a domain as provided
         redirector_domain_map = []
         if len(redirector_definition) >= 3:
-            redirector_domain = Domain(redirector_definition[2], redirector_definition[3])
-            redirector_domain = utils.build_resource_domain_map(proto, redirector_domain)
+            domain = redirector_definition[2]
+            d_provider = redirector_definition[3]
+            redirector_domain = Domain(domain, d_provider)
+            redirector_domain = build_resource_domain_map(protocol, redirector_domain)
             redirector_domain_map.append(redirector_domain)
         else:
-            if len(redirector_definition) == 2:
-                LogHandler.warn(f'Redirector provided without domain: "{redirector}". Building without any domain.')
-            else:
-                LogHandler.error(f'Invalid redirector provided: "{redirector}". Please make sure you define EITHER only the "<provider>:<protocol>" OR the "<provider>:<protocol>:<domain>:<registrar>"')
+            if not len(redirector_definition) == 2:
+                LogHandler.critical(f'Invalid redirector provided: "{shorthand}". Please make sure you define EITHER only the "<provider>:<protocol>" OR the "<provider>:<protocol>:<domain>:<registrar>"')
+            LogHandler.warn(f'Redirector provided without domain: "{shorthand}". Building without any domain.')                
 
-        redirector = Redirector(redirector_name, redirector_provider, redirector_domain_map, proto, None)
-        resources.append(redirector)
+        name = create_resource_name("redir")
+        redirector_name = f'{name}-{redirector_definition[1]}'
+
+        return Redirector(redirector_name, redirector_definition[0], redirector_domain_map, redirector_definition[1], None)
 
 
 class Teamserver(Server):

@@ -7,6 +7,7 @@ import yaml
 
 from core.log_handler import LogHandler
 from core.shell_handler import ShellHandler
+from core.binary_handler import BinaryHandler
 
 
 @dataclass
@@ -25,14 +26,13 @@ class RemoteConfigurationHandler:
 
 
     def __post_init__(self):
-        from core import BinaryExecutableHandler
         base_message = f'Remote Configuration Error:'
 
         # Generate path to where we will clone the repo
         self.repo_folder_on_disk = self.repo_folder_on_disk.joinpath(str(self.repo_uuid))
 
         # Check if we have Git installed
-        self.git_executable_path = BinaryExecutableHandler('git', self.git_executable_path)
+        self.git_executable_path = BinaryHandler('git', self.git_executable_path)
 
         # TODO Check if we were given a valid git repo URL
 
