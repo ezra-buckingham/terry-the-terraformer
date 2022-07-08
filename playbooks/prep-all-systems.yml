@@ -5,9 +5,9 @@
   become: true
   tasks:
 
-  - name: Ensure the admin user group exists
+  - name: Ensure the terryites user group exists
     ansible.builtin.group:
-      name: admin
+      name: terryites
       state: present
 
   - name: Set the hostname of the server to be the resource name
@@ -19,7 +19,7 @@
       name: "{{ item.value.user }}"
       state: present
       create_home: yes
-      groups: admin
+      groups: [ terryites ]
       shell: /bin/bash
     loop: "{{ team | dict2items }}"
     loop_control:
@@ -34,12 +34,11 @@
     loop_control:
       label: "{{ item.value.user }}"
 
-  - name: Allow admin users to sudo without a password
-    lineinfile:
-      dest: /etc/sudoers
+  - name: Allow the terryites group to sudo without a password
+    ansible.builtin.lineinfile:
+      path: /etc/sudoers
+      line: "%terryites ALL=(ALL) NOPASSWD:ALL"
       state: present
-      regexp: "^%admin"
-      line: "%admin ALL=(ALL) NOPASSWD:ALL"
 
   - name: Update APT repositories cache and install "ufw" and "tmux" packages
     apt:

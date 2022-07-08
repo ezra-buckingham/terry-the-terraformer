@@ -8,6 +8,6 @@ resource "namecheap_domain_records" "record-{{ record.safe_subdomain }}_{{ root_
   record {
     hostname = "{% if record.subdomain|length == 0 %}.{% else %}{{ record.subdomain }}{% endif %}" # Value provided by Jinja
     type = "{{ record.record_type }}" # Value provided by Jinja
-    address = {{ resource.terraform_resource_name }}.{{ resource.name }}.{{ resource.terraform_ip_reference }} # Value provided by Jinja
+    address = {{ resource.terraform_resource_name }}.{{ resource.uuid }}.{{ resource.terraform_ip_reference }} # Value provided by Jinja
   }
 }

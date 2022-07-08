@@ -10,7 +10,6 @@ services:
 {% for port in service.ports %}
     - "{{ port }}"
 {% endfor %}
-
 {% if 'volumes' in service %}
     volumes:
 {% for volume in service.volumes %}

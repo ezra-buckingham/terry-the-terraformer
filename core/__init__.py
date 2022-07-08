@@ -26,8 +26,66 @@ from core.environment_variable_handler import EnvironmentVariableHandler
 # Helper & Core Functions of Terry
 #################################################################################################################
 
+@click.pass_obj
+def prepare_nebula_handler(ctx_obj):
+    """Prepare the nebula handler object for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']
+    This is split out as we may want not want to search for the Nebula Binary too early in a build as it might not be needed
+
+    Args:
+        `None`
+    Returns:
+        `None`
+    """
+
+    # Get all the lighthouses from the resources
+    lighthouses = [ x for x in ctx_obj["all_resources"] if isinstance(x, Lighthouse) ]
+    
+    # Check with user if we want to build nebula when there are many servers in the build
+    if not ctx_obj['no_nebula'] and len(ctx_obj['server_resources']) > 1:
+        # Check to make sure we only have one lighthouse in the build
+        if len(lighthouses) > 1:
+            LogHandler.critical('Multiple Lighthouses found in build, Terry can only handle building one per deployment')
+    
+        if len(lighthouses) == 0:
+            LogHandler.warn('Nebula configured for this build, but no Lighthouses found. Either use the "-N" / "--no_nebula" flag or I can build one for you now.')
+            response = LogHandler.confirmation('Would you like me to add a Lighthouse to the current build?')
+            if response:
+                lighthouse_name = generate_random_name()
+
+                # Now get the provider from the user
+                provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
+                while provider not in TerraformObject.get_terraform_mappings(simple_list=True):
+                    LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {TerraformObject.get_terraform_mappings(simple_list=True)}', is_fatal=False)
+                    provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
+
+                lighthouse = Lighthouse(lighthouse_name, provider, None)
+                ctx_obj["server_resources"].insert(0, lighthouse)
+                ctx_obj["all_resources"].insert(0, lighthouse)
+            else:
+                LogHandler.warn('Opting out of Nebula for this build')
+                ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
+
+        # Need to check we have enough IPs in the IP space
+        # TODO
+    else:
+        LogHandler.warn('Nebula configured for this build, but only one server is in the manifest. Not going to use Nebula for this build as that would be a waste of resources.')
+        ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
+    
+    # Check if we said to have no nebula, but manually built a lighthouse
+    if ctx_obj['no_nebula'] and len(lighthouses) > 0:
+        LogHandler.warn('Lighthouse found in build along with "-N / --no_nebula"')
+        response = LogHandler.confirmation('Did you want to use Nebula for this build?')
+        if response:
+            ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
+
+    # Create the Nebula Handler (if applicable)
+    if not ctx_obj['no_nebula']:
+        nebula_path = ctx_obj['config_contents']['global']['nebula_path']
+        ctx_obj['nebula_handler'] = NebulaHandler(nebula_path, ctx_obj['config_contents']['global']['nebula_subnet'], Path(ctx_obj['op_directory']).joinpath('nebula'))   
+
+
 @click.pass_context
-def prepare_handlers(ctx):
+def prepare_core_handlers(ctx):
     """Prepare all the handler objects for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']`)
 
     Args:
@@ -43,18 +101,103 @@ def prepare_handlers(ctx):
     # Create the Slack Handler
     slack_webhook_url =  ctx.obj['config_contents']['slack']['webhook_url']
     ctx.obj['slack_handler'] = SlackHandler(slack_webhook_url, ctx.obj['quiet'])
+
+
+@click.pass_obj
+def prepare_and_run_ansible(ctx_obj):
+
+    # Create the Ansible Handler
+    ansible_path = ctx_obj['config_contents']['global']['ansible_path']
+    public_key, private_key = get_operation_ssh_key_pair()
+    ctx_obj['ansible_handler'] = AnsibleHandler(ansible_path, Path(ctx_obj['op_directory']).joinpath('ansible'), private_key)
     
-    # If not destroy, create all the other required handlers
-    if not ctx.command.name == 'destroy':
-        # Create the Ansible Handler
-        ansible_path = ctx.obj['config_contents']['global']['ansible_path']
-        ctx.obj['ansible_handler'] = AnsibleHandler(ansible_path, Path(ctx.obj['op_directory']).joinpath('ansible'))
+    # Build the Ansible Inventory
+    LogHandler.debug('Building Ansible inventory')  
+    AnsibleHandler.build_ansible_inventory(ctx_obj)
 
-        # Create the Nebula Handler (if applicable)
-        if not ctx.obj['no_nebula']:
-            nebula_path = ctx.obj['config_contents']['global']['nebula_path']
-            ctx.obj['nebula_handler'] = NebulaHandler(nebula_path, ctx.obj['config_contents']['global']['nebula_subnet'], Path(ctx.obj['op_directory']).joinpath('nebula'))   
+    # Run all the Prep playbooks
+    root_playbook_location = '../../../playbooks'
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
 
+    # Run all the server-type specific playbooks
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
+
+
+@click.pass_obj
+def read_build_manifest(ctx_obj):
+
+    build_manifest_file = Path(ctx_obj['op_directory']).joinpath('.terry/build_manifest.yml')
+
+    # Load the build config
+    if build_manifest_file.exists():
+        build_manifest = build_manifest_file.read_text()
+        build_manifest_yaml = yaml.safe_load(build_manifest)
+
+        return build_manifest_yaml
+    else:
+        LogHandler.warn(f'No build manifest found for "{ ctx_obj["operation"] }". Building one now...')
+        build_manifest_contents = {
+            'build_uuid': ctx_obj['build_uuid'],
+            'operation': ctx_obj['operation'],
+            'all_resources': []
+        }
+        build_manifest_yaml = yaml.safe_dump(build_manifest_contents)
+        build_manifest_file.write_text(build_manifest_yaml)
+        return build_manifest_contents
+
+
+@click.pass_obj
+def parse_build_manifest(ctx_obj):
+
+    LogHandler.debug('Parsing the build manifest')
+
+    build_manifest = read_build_manifest()
+
+    # Check if there are resources listed in the build manifest and append to all resources
+    if build_manifest['all_resources'] and len(build_manifest['all_resources']) > 0:
+        for resource in build_manifest['all_resources']:
+            resource_type, resource = list(resource.items())[0]
+
+            if resource_type == 'server':
+                resource = Server.from_dict(resource)
+            elif resource_type == 'domain':
+                resource = Domain.from_dict()
+
+            ctx_obj['all_resources'].append(resource)
+        
+        extract_nebula_config()
+
+
+@click.pass_obj
+def create_build_manifest(ctx_obj):
+    """"""
+
+    existing_build_manifest = read_build_manifest()
+
+    # Pass the build uuid to the CTX
+    ctx_obj['build_uuid'] = existing_build_manifest['build_uuid']
+
+    parse_build_manifest()
+
+    added_manifest_items = [ { resource.resource_type: resource.to_dict() } for resource in ctx_obj['all_resources'] ]
+
+    new_manifest = {
+        **existing_build_manifest,
+        'all_resources': added_manifest_items,
+        'lighthouse_nebula_ip': ctx_obj.get('lighthouse_nebula_ip'), 
+        'lighthouse_public_ip': ctx_obj.get('lighthouse_public_ip')
+    }
+
+    new_manifest_yaml = yaml.safe_dump(new_manifest)
+
+    build_manifest = Path(ctx_obj['op_directory']).joinpath('.terry/build_manifest.yml')
+    build_manifest.write_text(new_manifest_yaml)
+    
 
 @click.pass_obj
 def validate_credentials(ctx_obj, check_containers=True):
@@ -65,6 +208,8 @@ def validate_credentials(ctx_obj, check_containers=True):
     Returns:
         `None`
     """
+
+    LogHandler.info('Validating that we have all required credentials')
 
     required_providers = set()
     container_registry_credentials_checked = False
@@ -96,8 +241,54 @@ def validate_credentials(ctx_obj, check_containers=True):
         current_provider = Provider(provider)
         ctx_obj['required_providers'].append(current_provider)
      
-    LogHandler.info('All required credentials exist for the build')
+    LogHandler.info('All required credentials found')
     
+
+@click.pass_obj
+def retreive_remote_configurations(ctx_obj):
+
+    # Check to see if any remote configurations were defined in the config
+    for remote_config in ctx_obj["config_contents"]["ansible_configuration"]["remote"]:
+        if not remote_config["name"] or len(remote_config["name"]) == 0:
+            LogHandler.error('Found blank entry for a remote configuration in the config file, skipping blank entry...')
+            continue
+
+        LogHandler.info(f'Found name of "{ remote_config["name"] }" for a remote configuration, loading it now...')
+        remote_config = RemoteConfigurationHandler(remote_config["name"], remote_config["repo_url"], remote_config["username"], remote_config["personal_access_token"])
+
+        # Write out the configuration to the op_directory
+        configuration_location = Path(ctx_obj['op_directory']).joinpath(f'ansible/extra_vars/{ remote_config.configuration_name }.yml')
+        LogHandler.debug(f'Writing out "{ remote_config.configuration_name }" remote configuration to "{ configuration_location }"')
+        yaml_contents = yaml.dump(remote_config.configuration)
+        configuration_location.write_text(yaml_contents)
+
+
+@click.pass_obj
+def extract_nebula_config(ctx_obj):
+
+    LogHandler.debug('Getting the Lighthouse Public IP and Nebula IP from build manifest')
+
+    for resource in ctx_obj['all_resources']:
+        if isinstance(resource, Lighthouse):
+            ctx_obj['lighthouse_public_ip'] = resource.public_ip
+            ctx_obj['lighthouse_nebula_ip'] = resource.nebula_ip
+            return
+    
+    LogHandler.debug('No Lighthouse found in build manifest, assuming Nebula was not configured...')
+    ctx_obj['no_nebula'] = True
+
+
+@click.pass_obj
+def get_operation_ssh_key_pair(ctx_obj):
+    """Gets the SSH key that will be used for ansible (required because the generated key won't work for some reason, but reading it will???)
+    Returns the byte string of the SSH key
+    """
+
+    public_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key.pub')).read_bytes()
+    private_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key')).read_bytes()
+    
+    return public_key, private_key
+
 
 def generate_random_name():
     """Helper function to create a random resource name"""
@@ -265,17 +456,6 @@ def build_resource_domain_map(protocol, domain):
         domain.domain_records += modified_records
 
     return domain
-
-
-def get_operation_ssh_key_pair(ctx_obj):
-    """Gets the SSH key that will be used for ansible (required because the generated key won't work for some reason, but reading it will???)
-    Returns the byte string of the SSH key
-    """
-
-    public_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key.pub')).read_bytes()
-    private_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key')).read_bytes()
-    
-    return public_key, private_key
 
 
 def generate_ssh_key():

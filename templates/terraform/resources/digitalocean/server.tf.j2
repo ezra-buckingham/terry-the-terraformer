@@ -1,14 +1,22 @@
+{# 
+
+Errors Identified:
+
+Error: Error creating Volume: POST https://api.digitalocean.com/v2/volumes: 422 (request "d0f7873b-1bd4-408e-bfab-2f589faa5a73") failed to create volume: invalid volume name. names must be lowercase and alphanumeric
+
+#}
+
 # Create the Volume
-resource "digitalocean_volume" "volume-{{ safe_operation_name }}-{{ name }}" {
+resource "digitalocean_volume" "volume-{{ uuid }}" {
   region = "nyc3"
-  name = "volume-{{ safe_operation_name }}-{{ name }}"
+  name = "volume-{{ uuid }}"
   size = {{ terraform_disk_size_reference }}
   initial_filesystem_type = "ext4"
-  description = "Disk volume for {{ name }}"
+  description = "Disk volume for {{ uuid }} ({{ name }})"
 }
 
 # Create the Droplet
-resource "digitalocean_droplet" "{{ name }}" { # Value provided by Jinja
+resource "digitalocean_droplet" "{{ uuid }}" { # Value provided by Jinja
   image = "debian-11-x64"
   name = "{{ operation.replace("_","-") + '-' + name }}"{# Need to replace underscores since this is set as the droplet hostname #} # Value provided by Jinja 
   region = "nyc3"
@@ -17,7 +25,7 @@ resource "digitalocean_droplet" "{{ name }}" { # Value provided by Jinja
 }
 
 # Attach the Volume
-resource "digitalocean_volume_attachment" "volume-attachment-{{ name }}" {
-  droplet_id = digitalocean_droplet.{{ name }}.id
-  volume_id = digitalocean_volume.volume-{{ safe_operation_name }}-{{ name }}.id
+resource "digitalocean_volume_attachment" "volume-attachment-{{ uuid }}" {
+  droplet_id = digitalocean_droplet.{{ uuid }}.id
+  volume_id = digitalocean_volume.volume-{{ uuid }}.id
 }

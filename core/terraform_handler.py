@@ -17,7 +17,7 @@ class TerraformHandler:
         self.terraform_binary = BinaryHandler('terraform', terraform_path)
         self.working_dir = Path(working_dir).joinpath('terraform')
         try:
-            self.terraform = Terraform(working_dir=self.working_dir, terraform_bin_path=self.terraform_binary.path)
+            self.terraform = Terraform(working_dir=str(self.working_dir.absolute()), terraform_bin_path=str(self.terraform_binary.path.absolute()))
         except JSONDecodeError as e:
             message = 'Terraform Error: There was a JSON error with the Terraform Handler, there may be a lock file that cannot be read.'
             LogHandler.critical(message)
@@ -81,7 +81,19 @@ class TerraformHandler:
                     hosted_zones.add(hosted_zone)                    
 
         return plan
-            
+    
+
+    def show_state(self, json=True):
+        """"""
+
+        LogHandler.info('Getting Terraform state')
+
+        if json:
+            return_code, stdout, stderr = self.terraform.show(json=IsFlagged)
+        else:
+            return_code, stdout, stderr = self.terraform.show()   
+        return return_code, stdout, stderr
+
             
     def apply_plan(self, auto_approve=False):
         """Applies the Terraform plan.
@@ -89,10 +101,15 @@ class TerraformHandler:
         Returns return_code, stdout, stderr, and terraform_plan string of executed Terraform functions.
         """
 
+        LogHandler.info('Applying Terrafom plan')
+
         # Check whether Terraform needs to be initialized
         if not self.working_dir.joinpath('terraform/.terraform.lock.hcl').exists():
+            LogHandler.debug('Terraform not initialized, running "terraform init" now...')
             return_code, stdout, stderr = self.terraform.init()
+            LogHandler.debug('Terraform successfully initialized!')
 
+        LogHandler.debug('Terraform not planned, running "terraform plan" now...')
         return_code, stdout, stderr = self.terraform.plan()
         terraform_plan = stdout
 
@@ -107,17 +124,22 @@ class TerraformHandler:
             return_code, stdout, stderr = self.terraform.show(json=IsFlagged)
             return return_code, stdout, stderr, terraform_plan
         elif return_code == 1:
-            return return_code, stdout, stderr, None
+            LogHandler.critical(f'Terraform Plan returned an error: {stderr}')
         elif return_code == 2:  # Changes to be made
             # The `skip_plan` seems to be the option we need to send for auto_approve, which is a bug in the library
             return_code, stdout, stderr = self.terraform.apply(capture_output=False, skip_plan=auto_approve)
             # Handle the APPLY Return codes
             if return_code == 0:
                 # Get the created resource details from the terraform show command
-                return_code, stdout, stderr = self.terraform.show(json=IsFlagged)
+                LogHandler.debug('Terraform returned "0", thus Terraform may not have actually made any changes')
                 return return_code, stdout, stderr, terraform_plan
             elif return_code == 1:
-                return return_code, stdout, stderr, terraform_plan
+                base_message = 'Terraform returned an error:'
+                if not terraform_plan:
+                    LogHandler.critical(f'{base_message} {stderr}')
+                LogHandler.critical(f'{base_message} No stderr was returned, this is likely a logic issue or partial error within the plan. (Example: if AWS, a bad AMI given the region)')
+        else:
+            return return_code, stdout, stderr, terraform_plan
         
         # Non-reachable code
         return return_code, stdout, stderr, terraform_plan
@@ -126,6 +148,8 @@ class TerraformHandler:
         """Destroys the Terraform plan.
         Returns success (bool), stdout, stderr
         """
+
+        LogHandler.info('Destroying Terraform plan')
 
         # Check for an existing TF State
         if not self.working_dir.joinpath('terraform.tfstate').exists():
@@ -164,7 +188,13 @@ class TerraformHandler:
 
         for resource in terraform_resources:
             resource_values = resource['values']
-            matching_resource = [r for r in ctx_obj['all_resources'] if r.name == resource['name']]
+            resource_address = resource['address'].split('.')
+
+            # Skip over the data objects
+            if resource_address[0] == 'data': continue
+
+            resource_uuid = resource_address[1]
+            matching_resource = [r for r in ctx_obj['all_resources'] if r.uuid == resource_uuid]
             
             # Get the matching resource, if returned, else continue to next resource
             if (len(matching_resource) > 0):

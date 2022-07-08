@@ -8,8 +8,6 @@ import yaml
 from core.log_handler import LogHandler
 
 
-BUILD_UUID = ''
-
 
 #################################################################################################################
 # Parent Terraform, Ansible, & Container Classes
@@ -18,17 +16,21 @@ BUILD_UUID = ''
 class TerraformObject:
     """Base class for all things Terraform"""
 
-    def __init__(self, provider, infrastructure_type, uuid=uuid4()):
+
+    def __init__(self, provider, infrastructure_type, uuid=None, error_on_missing_resource_file=True):
         self.provider = provider
         self.infrastructure_type = infrastructure_type
-        self.uuid = str(uuid)
+        self.uuid = 'id-' + (uuid if uuid else str(uuid4()))
 
         inferred_path = f'./templates/terraform/resources/{self.provider}/{self.infrastructure_type}.tf.j2'
         path = Path(inferred_path)
         if path.exists():
             self.terraform_resource_path = path
-        else:
+        elif not error_on_missing_resource_file:
+            LogHandler.warn(f'Missing Terraform Resource file for "{self.provider}/{self.infrastructure_type}", but error override provided, continuning...')
+        else: 
             raise FileNotFoundError(f'File not found at {inferred_path}')
+
 
     @classmethod
     def get_terraform_mappings(self, simple_list=False, type='all'):
@@ -57,8 +59,10 @@ class TerraformObject:
 class AnsibleControlledObject:
     """Base class for representing an Ansible Controlled Resource"""
 
+
     def __init__(self):
         pass
+
 
     def prepare_object_for_ansible(self):
         """Take the Child AnsibleControlled Object and extract the data needed to write an inventory that the playbooks can reference
@@ -69,7 +73,6 @@ class AnsibleControlledObject:
             `self_dict (dict)`: The dictonary needed for the ansible playbooks for the child object
         """
         self_dict = {
-            'uuid': self.uuid,
             **self.core_playbook_vars
         }
 
@@ -113,13 +116,15 @@ class AnsibleControlledObject:
 
 
 class Container(AnsibleControlledObject):
+    """Base class for representing a Container that is deployed to a server"""
 
-    def __init__(self, name):
+
+    def __init__(self, name, required_args={}, container_config={}):
         AnsibleControlledObject.__init__(self)
         
         self.name = name
         # Default Values
-        self.required_args = {}
+        self.required_args = required_args
         self.container_config = {}
 
         # Get the container mappings
@@ -139,15 +144,15 @@ class Container(AnsibleControlledObject):
         from core import check_for_required_value
 
         # Get the required args from config
-        required_args = self.container_config.get('required_args', [])
+        required_args_from_config = self.container_config.get('required_args', [])
 
         # If no required args, just return
-        if not required_args: 
+        if not required_args_from_config: 
             return
         
         # Validate we have each arg
         LogHandler.debug(f'Validating required arguments for the "{self.name}" container')
-        for req_arg in required_args:
+        for req_arg in required_args_from_config:
             env_var = check_for_required_value(req_arg)
             self.required_args[env_var.name] = env_var.get()
 
@@ -155,7 +160,7 @@ class Container(AnsibleControlledObject):
     def to_dict(self):
         self_dict = {
             'name': self.name,
-            **self.required_args
+            'required_args': self.required_args
         }
 
         return self_dict
@@ -193,6 +198,7 @@ class Container(AnsibleControlledObject):
 class Provider(TerraformObject):
     """Base class for representing a Terraform provider"""
 
+
     def __init__(self, name, source='', version=''):
         self.name = name
         self.source = source
@@ -205,6 +211,9 @@ class Provider(TerraformObject):
         if not self.provider_config:
             LogHandler.critical(f'Provider Error ({self.name}): No provider configutation found in terraform mappings YAML')
         
+        # Set the source and version
+        self.source = self.provider_config['provider'].get('source', source)
+        self.version = self.provider_config['provider'].get('version', version)
         required_args = self.provider_config['provider'].get('required_args', [])
         
         # Validate we have each arg
@@ -214,6 +223,7 @@ class Provider(TerraformObject):
             env_var = check_for_required_value(req_arg)
             self.required_args[env_var.name] = env_var.get()
     
+
     def to_dict(self):
         self_dict = {
             'name': self.name,
@@ -223,6 +233,7 @@ class Provider(TerraformObject):
 
         return self_dict
 
+
     @classmethod
     def from_dict(self, dict):
         return Provider(dict['name'], dict['source'], dict['version'])
@@ -230,6 +241,7 @@ class Provider(TerraformObject):
 
 class SSHKey(TerraformObject):
     """Base class for representing an ssh key"""
+
 
     def __init__(self, provider, name, public_key=None, private_key=None):
         self.provider = provider
@@ -239,12 +251,14 @@ class SSHKey(TerraformObject):
 
         TerraformObject.__init__(self, provider, 'ssh_key')
 
+
     def get_fingerprint(self):
         stripped_key = self.public_key.strip()
         split_key = stripped_key.split()[1]
         base64_key = base64.b64decode(split_key.encode('ascii'))
         fp_plain = hashlib.md5(base64_key).hexdigest()
         return ':'.join(a+b for a,b in zip(fp_plain[::2], fp_plain[1::2]))
+
 
     def to_dict(self):
         self_dict = {
@@ -254,6 +268,7 @@ class SSHKey(TerraformObject):
         }
 
         return self_dict
+
 
     @classmethod
     def from_dict(self, dict):
@@ -281,6 +296,7 @@ class Domain(TerraformObject):
         full_subdomain = '.'.join(split_domain[:split_domain_length - 2])
         self.domain_records.append(DomainRecord(self.provider, full_subdomain, 'A'))
 
+
     def to_dict(self):
         self_dict = {
             'domain': self.domain,
@@ -289,11 +305,11 @@ class Domain(TerraformObject):
 
         return self_dict
 
+
     @classmethod
     def from_dict(self, dict):
         return Domain(dict['domain'], dict['provider'])
     
-
 
 class DomainRecord(TerraformObject):
     """Base class for representing a domain record entry (such as A record or NS record)"""
@@ -304,45 +320,69 @@ class DomainRecord(TerraformObject):
         self.record_type = record_type
 
         TerraformObject.__init__(self, provider, 'domain')
-
         
 
 #################################################################################################################
 # Servers & Server Types
 #################################################################################################################
 
+
 class Server(AnsibleControlledObject, TerraformObject):
     """Base class for representing servers"""
 
-    def __init__(self, name, provider, server_type, domain_map, containers=[]):
+    def __init__(self, name, provider, server_type, domain_map, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None):
+        self.resource_type = 'server'
         self.name = name
         self.server_type = server_type
         self.nebula_ip = None
+        self.public_ip = None
         self.domain_map = domain_map
         self.containers = containers
 
+        # Specific Properties for Server Types
+        self.domain_to_impersonate = domain_to_impersonate
+        self.redirector_type = redirector_type
+        self.proxy_to = proxy_to
+
+        # Init the Parents
         TerraformObject.__init__(self, provider, 'server')   
         AnsibleControlledObject.__init__(self)
 
+        # Get the config values
+        self.__get_server_config_from_terraform_mappings()
+        self.__check_server_size()
+        self.__check_server_disk_size()
+
+        # Get the core playbook vars setup
+        self.core_playbook_vars = {
+            'ansible_user': self.ansible_user,
+            'provider': self.provider
+        }
+
+
+    def __get_server_config_from_terraform_mappings(self):
+        """"""
+
         # Get the provider mappings
         parsed_yaml = TerraformObject.get_terraform_mappings()
-        current_provider = parsed_yaml[self.provider]['server']
+        self.server_config = parsed_yaml[self.provider]['server']
 
-        # Set the values based on the data in the config
-        self.terraform_resource_name = current_provider['resource_name']
-        self.ansible_user = current_provider['remote_user']
-        self.terraform_ip_reference = current_provider['ip_reference']
+         # Set the values based on the data in the config
+        self.terraform_resource_name = self.server_config['resource_name']
+        self.ansible_user = self.server_config['remote_user']
+        self.terraform_ip_reference = self.server_config['ip_reference']
 
-        # Populate the options with the Terry default values from the config
-        terry_defaults = current_provider['terry_defaults']
+        return self.server_config
+
+
+    def __check_server_size(self):
+        """"""
+
+        terry_defaults = self.server_config['terry_defaults']
 
         self.terraform_size_reference = terry_defaults['server_size'].get('global', None)
         if (not self.terraform_size_reference):
             LogHandler.error(f'No global server size default set for "{self.provider}" in terraform_mappings.yml')
-
-        self.terraform_disk_size_reference = terry_defaults['disk_size'].get('global', None)
-        if (not self.terraform_disk_size_reference):
-            LogHandler.error(f'No global server disk size default set for "{self.provider}" in terraform_mappings.yml')
 
         # Try to get the server size specific to this server type
         type_specific_terraform_size_reference = terry_defaults['server_size'].get(self.server_type, None)
@@ -351,6 +391,16 @@ class Server(AnsibleControlledObject, TerraformObject):
         else:
             LogHandler.debug(f'Found "{self.server_type}" specific server size of "{ type_specific_terraform_size_reference }" for "{self.provider}" in terraform_mappings.yml.')
             self.terraform_size_reference = type_specific_terraform_size_reference
+    
+
+    def __check_server_disk_size(self):
+        """"""
+
+        terry_defaults = self.server_config['terry_defaults']
+
+        self.terraform_disk_size_reference = terry_defaults['disk_size'].get('global', None)
+        if (not self.terraform_disk_size_reference):
+            LogHandler.error(f'No global server disk size default set for "{self.provider}" in terraform_mappings.yml')
 
         # Try to get the server disk size specific to this server type
         type_specific_terraform_disk_size_reference = terry_defaults['disk_size'].get(self.server_type, None)
@@ -359,16 +409,81 @@ class Server(AnsibleControlledObject, TerraformObject):
         else:
             LogHandler.debug(f'Found "{self.server_type}" specific disk size of "{ type_specific_terraform_disk_size_reference }" for "{self.provider}" in terraform_mappings.yml.')
             self.terraform_disk_size_reference = type_specific_terraform_disk_size_reference
-
-        # Get the core playbook vars setup
-        self.core_playbook_vars = {
-            'ansible_user': self.ansible_user,
-            'provider': self.provider
-        }
         
+
+    def to_dict(self):
+        # Base Dict for all Servers
+        self_dict = {
+            'uuid': self.uuid,
+            'resource_type': self.resource_type,
+            'name': self.name,
+            'provider': self.provider,
+            'server_type': self.server_type,
+            'nebula_ip': self.nebula_ip,
+            'public_ip': self.public_ip
+        }
+
+        # Check some of the other potential attributes
+        if self.containers:
+            self_dict['containers'] = [ container.to_dict() for container in self.containers ]
+        
+        if self.domain_to_impersonate:
+            self_dict['domain_to_impersonate'] = self.domain_to_impersonate
+
+        if self.redirector_type:
+            self_dict['redirector_type'] = self.redirector_type
+
+        if self.proxy_to:
+            self_dict['proxy_to'] = self.redirector_type
+
+        return self_dict
+
+    
+    @classmethod
+    def from_dict(self, dict):
+
+        # First get the core items
+        uuid = dict['uuid']
+        name = dict['name']
+        provider = dict['provider']
+        domain_map = [] # TODO
+        type = dict['server_type']
+        public_ip = dict['public_ip']
+
+        # Get the other props
+        nebula_ip = dict.get('nebula_ip')
+        redirector_type = dict.get('redirector_type')
+        redirect_to = dict.get('redirect_to')
+        dict_containers = dict.get('containers', [])
+
+        # Map the containers back
+        containers = []
+        for container in dict_containers:
+            containers.append(Container.from_dict(container))
+
+        # Build the server back
+        if type == 'teamserver':
+            server = Teamserver(name, provider, domain_map, containers)
+        elif type == 'redirector':
+            server = Redirector(name, provider, domain_map, redirector_type, redirect_to)
+        elif type == 'categorize':
+            server = Categorize(name, provider, domain_map, redirect_to)
+        elif type == 'bare':
+            server = Bare(name, provider, domain_map, containers)
+        elif type == 'lighthouse':
+            server = Lighthouse(name, provider, domain_map)
+        
+        server.uuid = uuid
+        server.public_ip = public_ip
+        server.nebula_ip = nebula_ip
+
+        return server
+
+
 #################################################################################################################
 # Server Types
 #################################################################################################################
+
 
 class Bare(Server):
     """Class for representing a bare server, without any custom config"""
@@ -378,34 +493,60 @@ class Bare(Server):
 
 
 class Lighthouse(Server):
-    """Class for representing a nebula Lighthouse server"""
+    """Class for representing a Nebula Lighthouse server"""
 
     def __init__(self, name, provider, domain_map):
         Server.__init__(self, name, provider, 'lighthouse', domain_map)
 
 
 class Mailserver(Server):
-    """"""
+    """Class for representing a mailserver"""
 
     def __init__(self, name, provider, domain_map, containers, mailserver_type):
-        self.containers = self.containers + [ mailserver_type ]
+        self.containers = containers + [ mailserver_type ]
 
         Server.__init__(self, name, provider, 'mailserver', domain_map, containers)
+
+
+class Teamserver(Server):
+    """Class for Teamservers, the piece of infrastructure running command and control software."""
+
+    def __init__(self, name, provider, domain_map, containers):
+        if domain_map and len(domain_map) > 0:
+            LogHandler.warn('Domain provided for a Teamserver, this is not reccomended, but you do you.')
+
+        Server.__init__(self, name, provider, 'teamserver', domain_map, containers)
+
+
+class Categorize(Server):
+    """Class for Categorization servers, infrastructure that allows us to have c2 domains"""
+
+    def __init__(self, name, provider, domain_map, domain_to_impersonate):
+
+        Server.__init__(self, name, provider, 'categorize', domain_map, containers=[], domain_to_impersonate=domain_to_impersonate)
+        
+        # We can only have one Categorization Server in a build request
+        if len(self.domain_map) != 1:
+            LogHandler.critical(f'Categorization Error: a domain map is required and with only one domain specified')
+        if not self.domain_to_impersonate:
+            LogHandler.critical(f'Categorization Error: a domain to impersonate required')
 
 
 class Redirector(Server):
     """Class for Redirectors, providing obfuscation layer between internet / victim and teamserver(s)."""
 
-    def __init__(self, name, provider, domain_map, redirector_type, redirect_to):
+    def __init__(self, name, provider, domain_map, redirector_type, proxy_to):
         self.redirector_type = redirector_type
-        self.redirect_to = redirect_to
+        self.proxy_to = proxy_to
 
-        Server.__init__(self, name, provider, 'redirector', domain_map, [])
+        Server.__init__(self, name, provider, 'redirector', domain_map, redirector_type=redirector_type, proxy_to=proxy_to)
+
 
     @classmethod
     def get_implemented_redirectors(self):
         redirector_types = ['https', 'dns', 'custom']
         return redirector_types
+
 
     @classmethod
     def from_shorthand_notation(self, shorthand):
@@ -443,33 +584,6 @@ class Redirector(Server):
             LogHandler.warn(f'Redirector provided without domain: "{shorthand}". Building without any domain.')                
 
         name = generate_random_name()
-        redirector_name = f'{name}-{redirector_definition[1]}'
+        redirector_name = f'{name}-{protocol}'
 
-        return Redirector(redirector_name, redirector_definition[0], redirector_domain_map, redirector_definition[1], None)
-
-
-class Teamserver(Server):
-    """Class for Teamservers, the piece of infrastructure running command and control software."""
-
-    def __init__(self, name, provider, domain_map, containers):
-        if domain_map and len(domain_map) > 0:
-            LogHandler.warn('Domain provided for a Teamserver, this is not reccomended, but you do you.')
-
-        Server.__init__(self, name, provider, 'teamserver', domain_map, containers)
-
-
-class Categorize(Server):
-    """Class for Categorization servers, infrastructure that allows us to have c2 domains"""
-
-    def __init__(self, name, provider, domain_map, domain_to_impersonate):
-        self.domain_to_impersonate = domain_to_impersonate
-
-        Server.__init__(self, name, provider, 'categorize', domain_map, [])
-        
-        # We can only have one Categorization Server in a build request
-        if len(self.domain_map) != 1:
-            LogHandler.critical(f'{self.__base_error_message} a domain map is required and with only one domain specified')
-        if not self.domain_to_impersonate:
-            LogHandler.critical(f'{self.__base_error_message} a domain to impersonate required')
-
-    
+        return Redirector(redirector_name, provider, redirector_domain_map, protocol, None)

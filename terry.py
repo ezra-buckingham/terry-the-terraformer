@@ -118,6 +118,7 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     ctx.obj['op_directory'] = project_directory.joinpath(operation)
     ctx.obj['required_providers'] = set()
     ctx.obj['server_resources'] = []  # List of resources (teamservers, redirectors) constituting the infrastructure
+    ctx.obj['domain_resources'] = []
     ctx.obj['all_resources'] = []  # List of resources (teamservers, redirectors), including redirectors (which are children objects of a resource)
     
     ctx.obj = {**ctx.obj, **ctx.params}
@@ -139,10 +140,12 @@ def destroy(ctx_obj, recursive):
     LogHandler.info(f'Destroying the "{ ctx_obj["operation"] }" plan')
 
     # Prepare all required handlers
-    prepare_handlers()
+    prepare_core_handlers()
 
     # Read in the build config
-    # TODO
+    parse_build_manifest()
+
+    # Validate our credentials
     validate_credentials(check_containers=False)
 
     success, stdout, stderr = ctx_obj['terraform_handler'].destroy_plan()
@@ -157,11 +160,15 @@ def destroy(ctx_obj, recursive):
             if Path(ctx_obj['op_directory']).exists():
                 LogHandler.warn(f'Destroying all files associated with "{ ctx_obj["operation"] }"')
                 remove_directory_recursively(ctx_obj["op_directory"])
-                LogHandler.info('File destruction complete')
+                LogHandler.info('File destruction complete!')
             else:
                 LogHandler.critical(f'No files or folder found for "{ ctx_obj["operation"] }"', True)
+        else:
+            LogHandler.warn('Leaving all build files intact. If you wish to destroy them, use the "-r" / "--recursive" flag')
     else:
         LogHandler.critical(f'Error when destroying "{ ctx_obj["operation"] }"\r\nSTDOUT: {stdout}\r\nSTDERR: {stderr}', True)
+    
+    LogHandler.info('Terry destroy complete!')
 
 
 @cli.group(name='create', chain=True)
@@ -172,11 +179,10 @@ def create(ctx):
     LogHandler.info(f'Creating the "{ ctx.obj["operation"] }" plan')
 
     # Prepare all required handlers
-    prepare_handlers()
+    prepare_core_handlers()
 
     operation_name = ctx.obj["operation"]
-    build_config_file = Path(ctx.obj['op_directory']).joinpath('.terry/build_config.yml')
-    build_uuid = ''
+    ctx.obj['build_uuid'] = str(uuid4())
 
     # Check for certificates directory
     certificates_directory = Path(ctx.obj['project_directory']).joinpath('.certificates')
@@ -189,7 +195,7 @@ def create(ctx):
         LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable)')
         Path(ctx.obj['op_directory']).mkdir()
         # Does not account for situations where op_directory exists but these children do not
-        for path in ['terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
+        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
             Path(ctx.obj['op_directory']).joinpath(path).mkdir(parents=True)
 
         # Generate the SSH Keys and write them to disk
@@ -200,20 +206,8 @@ def create(ctx):
         key_file.write_bytes(private_key)
         os.chmod(str(key_file), 0o700)
 
-        # Check to see if any remote configurations were defined
-        for remote_config in ctx.obj["ansible_configuration"]["remote"]:
-            if not remote_config["name"] or len(remote_config["name"]) == 0:
-                LogHandler.error('Found blank entry for a remote configuration in the config file, skipping blank entry...')
-                continue
-
-            LogHandler.info(f'Found name of "{ remote_config["name"] }" for a remote configuration, loading it now...')
-            remote_config = RemoteConfigurationHandler(remote_config["name"], remote_config["repo_url"], remote_config["username"], remote_config["personal_access_token"])
-
-            # Write out the configuration to the op_directory
-            configuration_location = Path(ctx.obj['op_directory']).joinpath(f'ansible/extra_vars/{ remote_config.configuration_name }.yml')
-            LogHandler.debug(f'Writing out "{ remote_config.configuration_name }" remote configuration to "{ configuration_location }"')
-            yaml_contents = yaml.dump(remote_config.configuration)
-            configuration_location.write_text(yaml_contents)
+        retreive_remote_configurations()
+        create_build_manifest()
 
     # If the directory exists, we must check the flags supplied to see what Terry should do
     else: 
@@ -221,67 +215,22 @@ def create(ctx):
         if not Path(ctx.obj["op_directory"]).joinpath('terraform/terraform.tfstate').exists():
             LogHandler.warn(f'No terraform state found for "{ operation_name }", continuing with build regardless of "-f" / "--force" flag.')
         elif not ctx.obj['force']:
-            LogHandler.critical('Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag. Just note that when using the force flag you may overwrite existing Terraform resources.')
+            LogHandler.critical(f'Terraform state found for "{ operation_name }". Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag. Just note that when using the force flag you may overwrite existing Terraform resources.')
         else:
             LogHandler.warn('Continuing since "-f" / "--force" was supplied.')
-        
-    # Load the build config
-    if build_config_file.exists():
-        build_config = build_config_file.read_text()
-        build_config_yaml = yaml.safe_load(build_config)
-        build_uuid = build_config_yaml['uuid']
-    else:
-        LogHandler.warn(f'No build configuration found for "{operation_name}", it was likely built with an older version of Terry. Some features may not be available due to this.')
-
+    
 
 @create.result_callback()
 @click.pass_obj
 def build_infrastructure(ctx_obj, resources):
     # Make sure we have credentials for each of the providers
     validate_credentials(check_containers=True)
-
-    # Get all the lighthouses from the resources
-    lighthouses = [ x for x in ctx_obj["all_resources"] if isinstance(x, Lighthouse) ]
-    
-    # Check with user if we want to build nebula when there are many servers in the build
-    if not ctx_obj['no_nebula'] and len(ctx_obj['server_resources']) > 1:
-        # Check to make sure we only have one lighthouse in the build
-        if len(lighthouses) > 1:
-            LogHandler.critical('Multiple Lighthouses found in build, Terry can only handle building one per deployment')
-    
-        if len(lighthouses) == 0:
-            LogHandler.warn('Nebula configured for this build, but no Lighthouses found. Either use the "-N" / "--no_nebula" flag or I can build one for you now.')
-            response = LogHandler.confirmation('Would you like me to add a Lighthouse to the current build?')
-            if response:
-                lighthouse_name = generate_random_name()
-
-                # Now get the provider from the user
-                provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
-                while provider not in TerraformObject.get_terraform_mappings(simple_list=True):
-                    LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {TerraformObject.get_terraform_mappings(simple_list=True)}', is_fatal=False)
-                    provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
-
-                lighthouse = Lighthouse(lighthouse_name, provider, None)
-                ctx_obj["server_resources"].insert(0, lighthouse)
-                ctx_obj["all_resources"].insert(0, lighthouse)
-            else:
-                LogHandler.warn('Opting out of Nebula for this build')
-                ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
-
-        # Need to check we have enough IPs in the IP space
-        # TODO
-    
-    # Check if we said to have no nebula, but manually built a lighthouse
-    if ctx_obj['no_nebula'] and len(lighthouses) > 0:
-        LogHandler.warn('Lighthouse found in build along with "-N / --no_nebula"')
-        response = LogHandler.confirmation('Did you want to use Nebula for this build?')
-        if response:
-            ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
+    prepare_nebula_handler()
 
     LogHandler.debug('Build looks good! Terry, take it away!')
 
     # Load the public key so we can build the ssh key resources later
-    public_key, private_key = get_operation_ssh_key_pair(ctx_obj)
+    public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
 
     # Create the terraform plan and build it 
@@ -290,23 +239,12 @@ def build_infrastructure(ctx_obj, resources):
     plan_file = Path(ctx_obj['op_directory']).joinpath(f'terraform/{ ctx_obj["operation"] }_plan.tf')
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
-    LogHandler.info('Applying Terrafom plan')
-    return_code, stdout, stderr, terraform_plan = ctx_obj['terraform_handler'].apply_plan(auto_approve=ctx_obj['auto_approve'])
 
-    if str(return_code) == '1':
-        base_message = 'Terraform returned an error:'
-        if terraform_plan is None:
-            LogHandler.critical(f'{base_message} {stderr}', True)
-        else:
-            LogHandler.critical(f'{base_message} No stderr was returned, this is likely a logic issue or partial error within the plan. (Example: if AWS, a bad AMI given the region)', True)
-    else:
-        LogHandler.info('Terraform apply successful!')
-        if str(return_code) == '0':
-            LogHandler.debug('Terraform returned "0", thus Terraform may not have actually made any changes')
-        # Create a json of the results from the Terraform state
-        results = json.loads(stdout)['values']['root_module']['resources']
-
-    # Map the results from terraform.show() results back into the resource objects
+    # Apply the plan and map results back
+    ctx_obj['terraform_handler'].apply_plan(auto_approve=ctx_obj['auto_approve'])
+    LogHandler.info('Terraform apply successful!')
+    return_code, stdout, stderr = ctx_obj['terraform_handler'].show_state(json=True)
+    results = json.loads(stdout)['values']['root_module']['resources']
     TerraformHandler.map_values(ctx_obj, results)
 
     # Configure Nebula
@@ -316,45 +254,91 @@ def build_infrastructure(ctx_obj, resources):
         for resource in ctx_obj['all_resources']:
             assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.name)
             resource.nebula_ip = assigned_nebula_ip
-            # Assign the lighthouse values so they can go into the config
-            if isinstance(resource, Lighthouse):
-                ctx_obj['lighthouse_nebula_ip'] = assigned_nebula_ip
-                ctx_obj['lighthouse_public_ip'] = resource.public_ip
+        extract_nebula_config()
     else:
         LogHandler.info('Skipping setting up Nebula configurations and certificates')
 
-    # Create the pickle file for the built resources
-    LogHandler.debug('Building Ansible inventory')  
-    AnsibleHandler.build_ansible_inventory(ctx_obj)
+    create_build_manifest()
+    prepare_and_run_ansible()
 
-    # Run all the Prep playbooks
-    root_playbook_location = '../../../playbooks'
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
-
-    # Run all the server-type specific playbooks
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
-    
     LogHandler.info('Ansible setup complete')
     ctx_obj['end_time'] = get_formatted_time()
     ctx_obj['slack_handler'].send_success(ctx_obj)
 
+    LogHandler.info('Terry create complete! Enjoy the tools you tool!')
+
 
 @cli.group(name='add')
 @click.pass_obj
-def add():
+def add(ctx_obj):
     """Add to an existing deployment"""
-    pass
 
+    LogHandler.info(f'Adding to the "{ ctx_obj["operation"] }" deployment')
 
-@cli.group(name='reconfigure')
+    # Prepare the core handlers
+    prepare_core_handlers()
+
+    # Read in the existing build manifest
+    parse_build_manifest()
+
+    # Validate our credentials
+    validate_credentials(check_containers=True)
+
+    # Prepare the Inventory file and run Ansible
+    prepare_and_run_ansible()
+
+    LogHandler.info('Terry additions complete! It seems to add up!')
+    
+
+@cli.command(name='refresh')
 @click.pass_obj
-def reconfigure():
-    """Reconfigure a deployment by refreshing Terraform state and re-running playbooks against each host"""
-    pass
+def refresh(ctx_obj):
+    """Refresh the deployment state and map results back to an updated build manifest"""
+
+    LogHandler.info(f'Refreshing the "{ ctx_obj["operation"] }" plan')
+
+    # Prepare the core handlers
+    prepare_core_handlers()
+
+    # Read in the existing build manifest
+    parse_build_manifest()
+
+    # Validate our credentials
+    validate_credentials(check_containers=False)
+
+    return_code, stdout, stderr = ctx_obj['terraform_handler'].show_state(json=True)
+    results = json.loads(stdout)['values']['root_module']['resources']
+
+    # Map the results from terraform.show() results back into the resource objects
+    TerraformHandler.map_values(ctx_obj, results)
+
+    LogHandler.info('Terry refresh complete! Refreshing, huh?')
+    
+
+
+@cli.command(name='reconfigure')
+@click.pass_obj
+def reconfigure(ctx_obj):
+    """Reconfigure a deployment by refreshing deployment state, getting updated remote configurations, and re-running playbooks against each host"""
+
+    LogHandler.info(f'Reconfiguring the "{ ctx_obj["operation"] }" plan')
+
+    # Prepare the core handlers
+    prepare_core_handlers()
+
+    # Read in the existing build manifest
+    parse_build_manifest()
+
+    # Validate our credentials
+    validate_credentials(check_containers=False)
+
+    # Retrieve any remote configuration files
+    retreive_remote_configurations()
+
+    # Prepare the Inventory file and run Ansible
+    prepare_and_run_ansible()
+
+    LogHandler.info('Terry reconfiguring complete!')
 
 
 #################################################################################################################
@@ -369,7 +353,7 @@ def reconfigure():
 @click.option('--type', '-t', required=True, type=click.Choice(get_implemented_server_types()), help='''
     The type of server to create
     ''')
-@click.option('--name', '-n', required=True, type=str, default=generate_random_name(), help='''
+@click.option('--name', '-n', required=False, type=str, help='''
     Name of the server (used for creating corresponding DNS records if you use the "domain" command)
     ''')
 @click.option('--container', '-cT', type=str, multiple=True, help='''
@@ -390,6 +374,9 @@ def server(ctx_obj, provider, type, name, redirector_type, redirect_to, domain, 
     """Create a server resource"""
 
     resources = []
+
+    if not name:
+        name = generate_random_name()
 
     # Build the redirector objects
     for redirector in redirector_type:
@@ -463,6 +450,3 @@ if __name__ == "__main__":
 
     # Run the CLI entrypoint
     cli()
-
-    # Log the completion
-    LogHandler.info('Terry run complete! Enjoy the tools you tool!')

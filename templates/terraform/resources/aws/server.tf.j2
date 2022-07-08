@@ -1,6 +1,6 @@
 
 # Get the AMI for Debian Buster
-data "aws_ami" "ami-{{ name }}" { # Value provided by Jinja
+data "aws_ami" "ami-{{ uuid }}" { # Value provided by Jinja
   most_recent = true
 
   filter {
@@ -15,9 +15,9 @@ data "aws_ami" "ami-{{ name }}" { # Value provided by Jinja
   owners = ["136693071363"] # Debian Owner ID
 }
 
-resource "aws_instance" "{{ name }}" { # Value Provided by Jinja
+resource "aws_instance" "{{ uuid }}" { # Value Provided by Jinja
 
-  ami = data.aws_ami.ami-{{ name }}.id  # Value Provided by Jinja
+  ami = data.aws_ami.ami-{{ uuid }}.id  # Value Provided by Jinja
   instance_type = "{{ terraform_size_reference }}"
   key_name = "{{ operation + '_' + provider + '_key' }}"  # Value provided by Jinja
 
@@ -27,6 +27,6 @@ resource "aws_instance" "{{ name }}" { # Value Provided by Jinja
   }
 
   tags = {
-    Name = "{{ operation + '-' + name }}"  # Value provided by Jinja
+    Name = "{{ operation + '-' + server_type + '-' + name }}"  # Value provided by Jinja
   }
 }

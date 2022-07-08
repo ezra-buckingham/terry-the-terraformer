@@ -57,7 +57,7 @@ class RemoteConfigurationHandler:
     def __clone_repo(self):
         # Create the command
         command = f"git clone https://{self.username}:{self.personal_access_token}@{self.repository_url} {self.repo_folder_on_disk}"
-        ShellHandler.run(command.split(' '), check=True)
+        ShellHandler.run(command.split(' '))
 
 
     def __parse_contents(self):

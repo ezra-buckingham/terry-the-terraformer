@@ -2,17 +2,54 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Testing Terry",
+      "name": "Testing Terry: Simple Create",
       "type": "python",
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "documentation", "-v", "-f", "-a", "create", 
+        "-o", "documentation", "-v", "-a", "-f", "create", 
+        "server", "-t", "bare", "-p", "aws",
+      ],
+      //"preLaunchTask": "Remove terry_testing files"
+    },
+    {
+      "name": "Testing Terry: Create",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "./terry.py",
+      "console": "integratedTerminal",
+      "args": [
+        "-o", "documentation", "-v", "-a", "-f", "create", 
         "server", "-t", "teamserver", "-cT", "cobaltstrike", "-rT", "digitalocean:dns:dermain.focusfireandsecuity.net:aws", "-p", "aws",
         "server", "-t", "bare", "-p", "aws",
         "server", "-t", "lighthouse", "-p", "digitalocean"
+      ],
+      //"preLaunchTask": "Remove terry_testing files"
+    },
+    {
+      "name": "Testing Terry: Refresh",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "./terry.py",
+      "console": "integratedTerminal",
+      "args": [
+        "-o", "documentation", "refresh"
+      ],
+      //"preLaunchTask": "Remove terry_testing files"
+    },
+    {
+      "name": "Testing Terry: Reconfigure",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "./terry.py",
+      "console": "integratedTerminal",
+      "args": [
+        "-o", "documentation", "-v", "reconfigure"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },
@@ -24,7 +61,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "documentation", "destroy"
+        "-o", "documentation", "destroy", "-r"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },

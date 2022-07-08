@@ -1,13 +1,13 @@
 
-resource "aws_route53_record" "record-{{ record.safe_subdomain }}_{{ root_domain }}" { # Value provided by Jinja
+resource "aws_route53_record" "{{ record.safe_subdomain }}_{{ root_domain }}" { # Value provided by Jinja
   count = 1
-  zone_id = data.aws_route53_zone.zone-{{ root_domain }}.zone_id  # Value provided by Jinja
+  zone_id = data.aws_route53_zone.zone-{{ root_domain }}-{{ top_level_domain }}.zone_id  # Value provided by Jinja
   {# If there is a length, give the subdomain, if not, leave blank #}
   name = "{% if record.subdomain|length > 0 %}{{record.subdomain}}.{{ domain }}{% else %}{{ domain }}{% endif %}" # Value provided by Jinja
   type = "{{ record.record_type }}" # Value provided by Jinja
   ttl = "300"
 
   records = [
-    {{ resource.terraform_resource_name }}.{{ resource.name }}.{{ resource.terraform_ip_reference }}
+    {{ resource.terraform_resource_name }}.{{ resource.uuid }}.{{ resource.terraform_ip_reference }}
   ]
 }

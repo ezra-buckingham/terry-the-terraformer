@@ -15,8 +15,8 @@ class NebulaHandler:
     def __init__(self, nebula_path, nebula_subnet, working_dir):
         self.nebula_path = Path(nebula_path)
         self.nebula_binary = BinaryHandler('nebula', Path(nebula_path).joinpath('nebula'))
-        self.nebula_ca_binary = BinaryHandler('nebula-ca', Path(nebula_path).joinpath('nebula'))
-        self.working_dir = Path(working_dir).joinpath('nebula')
+        self.nebula_ca_binary = BinaryHandler('nebula-cert', Path(nebula_path).joinpath('nebula-cert'))
+        self.working_dir = Path(working_dir)
         self.nebula_subnet = ipaddress.IPv4Network(nebula_subnet)
         self.__assigned_ips = set()
 
@@ -40,7 +40,7 @@ class NebulaHandler:
             return
         
         # Create the command and run it
-        generate_command = f'{ str(self.nebula_ca_binary) } ca -name 5TAG3'
+        generate_command = f'{ str(self.nebula_ca_binary.path) } ca -name 5TAG3'
 
         LogHandler.info('Generating Nebula CA Root certificate and key')
         try:
@@ -64,7 +64,7 @@ class NebulaHandler:
         new_ip_cidr = str(new_ip) + '/' + str(self.nebula_subnet.prefixlen)
 
         # Create the command and run it
-        generate_command = f'{ str(self.nebula_ca_binary) } sign -name { name.replace(" ", "") } -ip { new_ip_cidr }'
+        generate_command = f'{ str(self.nebula_ca_binary.path) } sign -name { name.replace(" ", "") } -ip { new_ip_cidr }'
         
         LogHandler.info(f'Generating Nebula client certificate and key for {name} at { new_ip_cidr }')
         try:

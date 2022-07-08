@@ -17,7 +17,7 @@ class ShellHandler:
 
         # Run the command, catch the error so that we can still change directory, and then raise that error back up
         try:
-            output = subprocess.run(command.split(' '), check=True)
+            output = subprocess.run(command, check=True)
         except subprocess.CalledProcessError as e:
             os.chdir(cwd)
             raise e

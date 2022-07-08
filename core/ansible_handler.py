@@ -66,7 +66,7 @@ class AnsibleHandler:
         # Ansible will lock this file at times, so we need to try to write the changes, but may not be able to
         try:
             # Create the Global Vars to pass to ansible
-            global_vars = ctx_obj["ansible_configuration"]["global"]
+            global_vars = ctx_obj["config_contents"]["ansible_configuration"]["global"]
             global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
             global_vars["nebula"] = not ctx_obj['no_nebula']
             # If installing Nebula, give the additional vars needed for configuring it on the hosts
@@ -75,7 +75,7 @@ class AnsibleHandler:
                 global_vars["lighthouse_nebula_ip"] = ctx_obj['lighthouse_nebula_ip']
 
             # Give Ansible the default users from the configuration file
-            default_users = ctx_obj["ansible_configuration"]["default_users"]
+            default_users = ctx_obj["config_contents"]["ansible_configuration"]["default_users"]
             global_vars['team'] = default_users
 
             # Check if we have extra_vars to put into the inventory
@@ -87,8 +87,8 @@ class AnsibleHandler:
                 file_contents = open_yaml_file.read_text()
                 yaml_contents = yaml.safe_load(file_contents)
                 global_vars = {
-                    **yaml_contents,
-                    **global_vars
+                    **global_vars,
+                    **yaml_contents
                 }
                 
             # Build the dictionary and write it to disk

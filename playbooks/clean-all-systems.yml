@@ -1,0 +1,47 @@
+---
+- name: Clean the system from all old users and firewall configurations
+  gather_facts: true
+  hosts: all
+  become: true
+  tasks:
+
+  - name: Verify UFW installed
+    apt:
+      name: ufw
+      state: present
+
+  - name: Remove terryites group from sudoers file (if present)
+    ansible.builtin.lineinfile:
+      path: /etc/sudoers
+      line: "%terryites ALL=(ALL) NOPASSWD:ALL"
+      state: absent
+
+  - name: Determine existing users
+    shell: 'grep terryites /etc/group | cut -d: -f4 | tr "," "\n"'
+    changed_when: false 
+    register: existing_users
+
+  - name: Get list of just usernames from the team fact
+    set_fact: 
+      team_usernames: "{{ team | dict2items | map(attribute='value') | list | map(attribute='user') | list }}"
+
+  - name: Determine existing users we need to remove
+    set_fact:
+      removed_users: "{{ existing_users.stdout_lines | difference(team_usernames) }}"
+
+  - name: Debug
+    debug:
+      msg: "{{ removed_users }}"
+
+  - name: Delete removed user accounts
+    user:
+      name: "{{ user_to_remove }}"
+      state: absent
+    loop: "{{ removed_users }}"
+    loop_control:
+      loop_var: "user_to_remove"
+
+  - name: Reset the UFW Firewall
+    shell: |
+      ufw --force reset
+      
