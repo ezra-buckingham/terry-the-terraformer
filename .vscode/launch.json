@@ -23,7 +23,9 @@
       "console": "integratedTerminal",
       "args": [
         "-o", "documentation", "-v", "-a", "-f", "create", 
-        "server", "-t", "teamserver", "-cT", "cobaltstrike", "-rT", "digitalocean:dns:dermain.focusfireandsecuity.net:aws", "-p", "aws",
+        "server", "-sN", "barey", "-t", "bare", "-d", "flip.focusfireandsecuity.net:aws", "-p", "aws",
+        "domain", "-p", "aws", "-sN", "barey", "-d", "coolant.focusfireandsecuity.net",
+        "server", "-t", "redirector", "-d", "dermain.focusfireandsecuity.net:aws", "-rT", "dns", "-p", "aws",
         "server", "-t", "bare", "-p", "aws",
         "server", "-t", "lighthouse", "-p", "digitalocean"
       ],

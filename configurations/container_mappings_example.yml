@@ -82,3 +82,71 @@ services:
     post_run_commands: 
 
  
+  deimos:
+    container_name: deimos
+    image: <image_path>
+    stdin_open: false
+    tty: false
+    command: ""
+    ports:
+      - "2222:8443/tcp"
+      - "2443:443/tcp"
+      - "280:80/tcp"
+      - "253:53/udp"
+    volumes:
+      - type: bind
+        source: /opt/container/deimos/mount
+        target: /opt/sliver/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+    pre_run_commands:
+    post_run_commands:
+
+
+  sliver:
+    container_name: sliver
+    image: <image_path>
+    stdin_open: false
+    tty: false
+    command: "daemon -p 3333"
+    ports:
+      - "3333:3333/tcp"
+      - "3443:443/tcp"
+      - "380:80/tcp"
+      - "353:53/udp"
+    volumes:
+      - type: bind
+        source: /opt/container/sliver/mount
+        target: /opt/sliver/mount
+    # Begin invalid docker-compose (used by Terry & Ansible and stripped from file before deployment to server)
+    required_args:
+    pre_run_commands:
+      - name: "Delete any existing sliver configs"
+        ansible.builtin.file:
+          path: "/opt/container/sliver/mount/[[ old_sliver_user.value.user ]].conf"
+          state: absent
+        loop: "[[ team | dict2items ]]"
+        loop_control:
+          loop_var: old_sliver_user
+          label: "[[ old_sliver_user.value.user ]]"
+      - name: "Delete the sliver config for the custom sliver client"
+        ansible.builtin.file:
+          path: "/opt/sliver/mount/sally-sliver-siren.conf"
+          state: absent
+    post_run_commands:
+      - name: "Generate the sliver configs for each user"
+        command: "docker exec sliver /opt/sliver/sliver-server operator --lhost [[ ansible_ssh_host ]] --lport 3333 --name [[ new_sliver_user.value.user ]] --save /opt/sliver/mount/[[ new_sliver_user.value.user ]].conf"
+        loop: "[[  team | dict2items ]]"
+        loop_control:
+          loop_var: new_sliver_user
+          label: "[[ new_sliver_user.value.user ]]"
+      - name: "Change ownership of each sliver config to the respective user"
+        ansible.builtin.file: 
+          path: "/opt/sliver/mount/[[ new_sliver_user.value.user ]].conf"
+          owner: "[[ new_sliver_user.value.user ]]"
+        loop: "[[  team | dict2items ]]"
+        loop_control:
+          loop_var: new_sliver_user
+          label: "[[ new_sliver_user.value.user ]]"
+      - name: "Install Sally the Sliver Siren"
+        include_tasks: "[[ playbook_dir ]]/install/install-sally-the-sliver-siren.yml"

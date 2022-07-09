@@ -1,5 +1,5 @@
 # Create a new SSH key
-resource "digitalocean_ssh_key" "{{ name }}" { # Value provided by Jinja
-  name       = "{{ name }}" # Value provided by Jinja
+resource "digitalocean_ssh_key" "{{ provider }}-{{ build_uuid }}" { # Value provided by Jinja
+  name       = "{{ provider }}-{{ build_uuid }}" # Value provided by Jinja
   public_key = "{{ public_key.decode('utf-8') }}" # Value provided by Jinja
 }

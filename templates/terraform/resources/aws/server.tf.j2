@@ -1,4 +1,3 @@
-
 # Get the AMI for Debian Buster
 data "aws_ami" "ami-{{ uuid }}" { # Value provided by Jinja
   most_recent = true
@@ -11,15 +10,13 @@ data "aws_ami" "ami-{{ uuid }}" { # Value provided by Jinja
     name   = "virtualization-type"
     values = ["hvm"]
   }
-
   owners = ["136693071363"] # Debian Owner ID
 }
 
 resource "aws_instance" "{{ uuid }}" { # Value Provided by Jinja
-
   ami = data.aws_ami.ami-{{ uuid }}.id  # Value Provided by Jinja
   instance_type = "{{ terraform_size_reference }}"
-  key_name = "{{ operation + '_' + provider + '_key' }}"  # Value provided by Jinja
+  key_name = "{{ provider }}-{{ build_uuid }}"  # Value provided by Jinja
 
   root_block_device {
     delete_on_termination = true

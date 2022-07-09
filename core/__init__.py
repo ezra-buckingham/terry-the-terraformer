@@ -41,7 +41,7 @@ def prepare_nebula_handler(ctx_obj):
     lighthouses = [ x for x in ctx_obj["all_resources"] if isinstance(x, Lighthouse) ]
     
     # Check with user if we want to build nebula when there are many servers in the build
-    if not ctx_obj['no_nebula'] and len(ctx_obj['server_resources']) > 1:
+    if not ctx_obj['no_nebula'] and len([ resource for resource in ctx_obj['all_resources'] if isinstance(resource, Server) ]) > 1:
         # Check to make sure we only have one lighthouse in the build
         if len(lighthouses) > 1:
             LogHandler.critical('Multiple Lighthouses found in build, Terry can only handle building one per deployment')
@@ -105,6 +105,13 @@ def prepare_core_handlers(ctx):
 
 @click.pass_obj
 def prepare_and_run_ansible(ctx_obj):
+    """Prepare all the Ansible handler object and run all playbooks (handler will be given to the Click Context Object at `ctx.obj['ansible_handler']`)
+
+    Args:
+        `None`
+    Returns:
+        `None`
+    """
 
     # Create the Ansible Handler
     ansible_path = ctx_obj['config_contents']['global']['ansible_path']
@@ -130,6 +137,13 @@ def prepare_and_run_ansible(ctx_obj):
 
 @click.pass_obj
 def read_build_manifest(ctx_obj):
+    """Read the build manifest **without passing values into the Click Context** (will create a base build manifest if not found)
+
+    Args:
+        `None`
+    Returns:
+        `build_manifest (dict)`: The build manifest contents
+    """
 
     build_manifest_file = Path(ctx_obj['op_directory']).joinpath('.terry/build_manifest.yml')
 
@@ -153,10 +167,19 @@ def read_build_manifest(ctx_obj):
 
 @click.pass_obj
 def parse_build_manifest(ctx_obj):
+    """Read the build manifest **and pass values into the Click Context**
+
+    Args:
+        `None`
+    Returns:
+        `build_manifest (dict)`: The build manifest contents
+    """
 
     LogHandler.debug('Parsing the build manifest')
 
+    # Read the manifest and pass in the top level items to click context
     build_manifest = read_build_manifest()
+    ctx_obj['build_uuid'] = build_manifest['build_uuid']
 
     # Check if there are resources listed in the build manifest and append to all resources
     if build_manifest['all_resources'] and len(build_manifest['all_resources']) > 0:
@@ -172,32 +195,40 @@ def parse_build_manifest(ctx_obj):
         
         extract_nebula_config()
 
+    return build_manifest
+
 
 @click.pass_obj
 def create_build_manifest(ctx_obj):
-    """"""
+    """Create the build manifest with all the current build objects
 
-    existing_build_manifest = read_build_manifest()
+    Args:
+        `None`
+    Returns:
+        `new_build_manifest (dict)`: The newly created build manifest
+    """
 
-    # Pass the build uuid to the CTX
-    ctx_obj['build_uuid'] = existing_build_manifest['build_uuid']
+    LogHandler.debug('Creating the build manifest')
 
-    parse_build_manifest()
+    # Read in the existing build manifest
+    existing_build_manifest = parse_build_manifest()
 
+    # Get the items from the current build an create the new manifest
     added_manifest_items = [ { resource.resource_type: resource.to_dict() } for resource in ctx_obj['all_resources'] ]
-
     new_manifest = {
         **existing_build_manifest,
         'all_resources': added_manifest_items,
         'lighthouse_nebula_ip': ctx_obj.get('lighthouse_nebula_ip'), 
         'lighthouse_public_ip': ctx_obj.get('lighthouse_public_ip')
     }
-
     new_manifest_yaml = yaml.safe_dump(new_manifest)
 
+    # Write the new manifest out
     build_manifest = Path(ctx_obj['op_directory']).joinpath('.terry/build_manifest.yml')
     build_manifest.write_text(new_manifest_yaml)
-    
+
+    return new_manifest_yaml
+
 
 @click.pass_obj
 def validate_credentials(ctx_obj, check_containers=True):
@@ -228,14 +259,6 @@ def validate_credentials(ctx_obj, check_containers=True):
                     check_for_required_value('container_registry_password', hide_input=True)
                     container_registry_credentials_checked = True
 
-        if resource.domain_map:
-            for domain in resource.domain_map:
-                registrars = TerraformObject.get_terraform_mappings(simple_list=True, type='registrar')
-                if not domain.provider in registrars:
-                    LogHandler.critical(f'Registrar of {domain.provider} not implemented. Please implement it and rerun or change the registrar.')
-                else: 
-                    required_providers.add(domain.provider)
-
     ctx_obj['required_providers'] = []
     for provider in required_providers:
         current_provider = Provider(provider)
@@ -246,6 +269,15 @@ def validate_credentials(ctx_obj, check_containers=True):
 
 @click.pass_obj
 def retreive_remote_configurations(ctx_obj):
+    """Retreive the Ansible remote configuration definitions from the config, load them, and write them to the `ansible/extra_vars` directory
+
+    Args:
+        `None`
+    Returns:
+        `remote_configs_loaded (list(dict))`: List of the loaded remote configurations
+    """
+
+    LogHandler.info('Checking config for remote configuration definitions')
 
     # Check to see if any remote configurations were defined in the config
     for remote_config in ctx_obj["config_contents"]["ansible_configuration"]["remote"]:
@@ -262,9 +294,20 @@ def retreive_remote_configurations(ctx_obj):
         yaml_contents = yaml.dump(remote_config.configuration)
         configuration_location.write_text(yaml_contents)
 
+    LogHandler.info('Parsing of config for remote configuration definitions complete')
+
+    return ctx_obj["config_contents"]["ansible_configuration"]["remote"]
+
 
 @click.pass_obj
 def extract_nebula_config(ctx_obj):
+    """Extracts the Lighthouse's Nebula IP as well as Public IP and passes that to the Click Context
+
+    Args:
+        `None`
+    Returns:
+        `nebula_ip (str)`, `public_ip (str)`: The Nebula IP and Public IP of the Lighthouse (`None`, `None` if not found)
+    """
 
     LogHandler.debug('Getting the Lighthouse Public IP and Nebula IP from build manifest')
 
@@ -272,16 +315,22 @@ def extract_nebula_config(ctx_obj):
         if isinstance(resource, Lighthouse):
             ctx_obj['lighthouse_public_ip'] = resource.public_ip
             ctx_obj['lighthouse_nebula_ip'] = resource.nebula_ip
-            return
+            return resource.nebula_ip, resource.public_ip
     
     LogHandler.debug('No Lighthouse found in build manifest, assuming Nebula was not configured...')
     ctx_obj['no_nebula'] = True
 
+    return None, None
+
 
 @click.pass_obj
 def get_operation_ssh_key_pair(ctx_obj):
-    """Gets the SSH key that will be used for ansible (required because the generated key won't work for some reason, but reading it will???)
-    Returns the byte string of the SSH key
+    """Gets the SSH key that will be used for ansible (required because using the byte array as generated won't work for some reason, but reading after it is written will???)
+
+    Args:
+        `None`
+    Returns:
+        `public_key (bytes)`, `private_key (bytes)`: The public and private key pair as a tuple
     """
 
     public_key = Path(ctx_obj['op_directory'].joinpath(f'{ctx_obj["operation"]}_key.pub')).read_bytes()
@@ -290,23 +339,192 @@ def get_operation_ssh_key_pair(ctx_obj):
     return public_key, private_key
 
 
+@click.pass_obj
+def get_domain_zone_index_from_build(ctx_obj, domain_zone):
+    """Gets the reference to domain zone from the build (if exists)
+    
+    Args:
+        `domain_zone (str)`: Domain zone (only the TLD and domain formatted as example.com)
+    Returns
+        `domain (Domain)`: Domain zone
+    """
+
+    for index, domain in enumerate(ctx_obj['all_resources']):
+        if isinstance(domain, Domain) and domain.domain == domain_zone:
+            return index
+
+    return None
+
+
+@click.pass_obj
+def get_server_from_uuid_or_name(ctx_obj, resource_uuid_or_name):
+    """"""
+
+    # Check if we were given a UUID 
+    if len(resource_uuid_or_name) == 39 or len(resource_uuid_or_name) == 36:
+        if len(resource_uuid_or_name) == 36:
+            resource_uuid_or_name = f'id-{ resource_uuid_or_name }'
+        resource = [ server for server in  ctx_obj['all_resources'] if isinstance(server, Server) and server.uuid == resource_uuid_or_name ][0]
+    # If length doesn't match the UUID, we can safely assume (I hope) we have a name
+    else:
+        resource = [ server for server in  ctx_obj['all_resources'] if isinstance(server, Server) and server.name == resource_uuid_or_name ][0]
+
+    return resource
+
+
+@click.pass_obj
+def build_terraform_plan(ctx_obj):
+    """Build the Terraform plan.
+    Takes the Click context object dictionary.
+    Returns a complete Terraform plan as a string.
+    Uses the utils.render_template function to render the Terraform plan based on
+    provider and resource templates.
+    """
+
+    plan = ''
+    jinja_handler = JinjaHandler(".")
+
+    # Start with adding the providers
+    plan += jinja_handler.get_and_render_template('./templates/terraform/provider.tf.j2', {'required_providers' : ctx_obj['required_providers']})+ '\n\n'
+        
+    # Now prepare it all
+    for resource in ctx_obj["all_resources"]:
+
+        # Now prepare the resource
+        jinja_vars = { **vars(resource), **ctx_obj }
+        plan += jinja_handler.get_and_render_template(resource.terraform_resource_path, jinja_vars) + '\n\n'             
+
+    return plan
+
+
+@click.pass_obj
+def map_terraform_values_to_resources(ctx_obj, json_data):
+    """Map results from Terraform plan application back to class instances.
+    Takes the click context object dictionary and JSONified terraform.show() results.
+    Returns nothing (updates resource classes in place).
+    """
+
+    LogHandler.debug('Mapping Terraform state')
+
+    # Get the terraform mappings so we know what keys to search for
+    terraform_mappings = TerraformObject.get_terraform_mappings()
+
+    for resource in json_data:
+        resource_values = resource['values']
+        resource_address = resource['address'].split('.')
+
+        # Skip over the data objects
+        if resource_address[0] == 'data': continue
+
+        resource_uuid = resource_address[1]
+        matching_resource = [r for r in ctx_obj['all_resources'] if r.uuid == resource_uuid]
+            
+        # Get the matching resource, if returned, else continue to next resource
+        if (len(matching_resource) > 0):
+            matching_resource = matching_resource[0]
+        else:
+            continue
+
+        # Need to extract the provider from the name returned in the JSON
+        current_provider_fqdn = resource['provider_name']
+        current_provider_fqdn = current_provider_fqdn.split('/')
+        current_provider = current_provider_fqdn[len(current_provider_fqdn) - 1]
+
+        # Get the ip_reference for the specific provider
+        ip_reference = terraform_mappings[current_provider]['server']['ip_reference']
+        matching_resource.public_ip = resource_values[ip_reference]
+
+
+@click.pass_obj
+def build_ansible_inventory(ctx_obj):
+    """"""
+
+    # We want to build a file so that ansible could be independently run outside of terry
+    # as opposed to passing a dict to ansible_runner
+
+    server_types = get_implemented_server_types()
+    inventory = {inventory: {'hosts': {}} for inventory in server_types}
+
+    for resource in ctx_obj['all_resources']:
+        inventory[resource.server_type]['hosts'][resource.public_ip] = resource.prepare_object_for_ansible()
+            
+    # Ansible will lock this file at times, so we need to try to write the changes, but may not be able to
+    try:
+        # Create the Global Vars to pass to ansible
+        global_vars = ctx_obj["config_contents"]["ansible_configuration"]["global"]
+        global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
+        global_vars["nebula"] = not ctx_obj['no_nebula']
+        # If installing Nebula, give the additional vars needed for configuring it on the hosts
+        if global_vars["nebula"]:
+            global_vars["lighthouse_public_ip"] = ctx_obj['lighthouse_public_ip']
+            global_vars["lighthouse_nebula_ip"] = ctx_obj['lighthouse_nebula_ip']
+
+        # Give Ansible the default users from the configuration file
+        default_users = ctx_obj["config_contents"]["ansible_configuration"]["default_users"]
+        global_vars['team'] = default_users
+
+        # Check if we have extra_vars to put into the inventory
+        path_to_extra_vars = ctx_obj["op_directory"].joinpath('ansible/extra_vars')
+        yaml_files = list(path_to_extra_vars.glob('**/*.yml'))
+        for yaml_file in yaml_files:
+            # Open the file, parse it, and then spread it into the global vars
+            open_yaml_file = Path(yaml_file)
+            file_contents = open_yaml_file.read_text()
+            yaml_contents = yaml.safe_load(file_contents)
+            global_vars = {
+                **global_vars,
+                **yaml_contents
+            }
+                
+        # Build the dictionary and write it to disk
+        ansible_inventory = {'all': { 'vars': global_vars, 'children': inventory }}
+        yaml_text = yaml.safe_dump(ansible_inventory)
+        Path(ctx_obj['op_directory']).joinpath('ansible/inventory/hosts').write_text(yaml_text)
+    except PermissionError as e:
+        LogHandler.warn('There was a "PermissionError" while writing the Ansible inventory file')
+        
+    return inventory
+
+
+@click.pass_obj
+def map_domain_to_server_value(domain: Domain, server: Server):
+    """"""
+
+
 def generate_random_name():
-    """Helper function to create a random resource name"""
+    """Helper function to create 2 random words from `/usr/share/dict/words` to make a name (words limited to 8 characters each)
+    
+    Args:
+        `None`
+    Returns:
+        `random_name (str)`: A random name consisting of `<word1>-<word2>`
+    """
 
     word_file = Path("/usr/share/dict/words")
     words = word_file.read_text().splitlines()
 
-    random_word1 = words[random.randint(0, len(words))].lower()
-    random_word2 = words[random.randint(0, len(words))].lower()
+    def __get_random_word():
+        word = words[random.randint(0, len(words))]
+        while len(word) > 9:
+            word = words[random.randint(0, len(words))]
+        return word.lower()
+
+    random_word1 = __get_random_word()
+    random_word2 = __get_random_word()
 
     return f'{random_word1}-{random_word2}'
-
-    # WORDS = open(word_file).read().splitlines()
-    # return type + (str([x.server_type for x in ctx_obj['all_resources']].count(type) + 1))
 
 
 @click.pass_obj
 def is_verbose_enabled(ctx_obj):
+    """Checks the Click Context for verbosity level being set by the CLI
+    
+    Args:
+        `None`
+    Returns:
+        `verbose (bool)`: Verbose logging enabled boolean
+    """
+
     return ctx_obj['verbose']
 
 
@@ -434,6 +652,12 @@ def get_implemented_server_types():
 
     server_types = ['bare', 'categorize', 'teamserver', 'lighthouse', 'redirector']
     return server_types
+
+
+def get_implemented_redirector_types():
+
+    redirector_types = ['http', 'https', 'dns', 'custom']
+    return redirector_types
 
 
 def build_resource_domain_map(protocol, domain):

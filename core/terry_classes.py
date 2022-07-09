@@ -1,7 +1,9 @@
 import base64
 import hashlib
+from operator import sub
 from pathlib import Path
 from uuid import uuid4
+from xml import dom
 
 import yaml
 
@@ -42,18 +44,20 @@ class TerraformObject:
             `mappings (dict)`: Dictionary containing the configuration
         """
 
-        if type == 'all':
-            """"""
-        elif type == 'registrar':
-            """"""
-        elif type == '':
-            """"""
-
+        # Get the mappings file and read it in
         mappings = Path('./configurations/terraform_mappings.yml').read_text()
-        # Parse the yaml and set the proper values
-        parsed_yaml = yaml.safe_load(mappings)
+        mappings = yaml.safe_load(mappings)
+
+        if type == 'server':
+            mappings = dict(filter(lambda provider: 'server' in provider[1], mappings.items()))
+        elif type == 'domain':
+            mappings = dict(filter(lambda provider: provider[1]['is_registrar'], mappings.items()))
+
+        # Check if we were asked for a simple list
+        if simple_list:
+            mappings = list(mappings.keys())
         
-        return parsed_yaml
+        return mappings
 
 
 class AnsibleControlledObject:
@@ -275,13 +279,18 @@ class SSHKey(TerraformObject):
         return SSHKey(dict['name'], dict['public_key'], dict['private_key'])
 
 
+#################################################################################################################
+# Domain Objects
+#################################################################################################################
+
+
 class Domain(TerraformObject):
     """Base class for representing a domain resource for Terraform"""
 
     def __init__(self, domain, provider):
         self.domain = domain
 
-        TerraformObject.__init__(self, provider, 'domain_zone') 
+        TerraformObject.__init__(self, provider, 'domain') 
 
         self.domain_records = []
         split_domain = self.domain.split('.')
@@ -292,9 +301,10 @@ class Domain(TerraformObject):
         self.top_level_domain = split_domain[split_domain_length - 1]
         self.domain = f'{self.root_domain}.{self.top_level_domain}'
 
-        # Parse out the subdomain
-        full_subdomain = '.'.join(split_domain[:split_domain_length - 2])
-        self.domain_records.append(DomainRecord(self.provider, full_subdomain, 'A'))
+
+    def add_record(self, subdomain, record_type, value):
+        domain_record = Domain.__DomainRecord(subdomain, record_type, value)
+        self.domain_records.append(domain_record)
 
 
     def to_dict(self):
@@ -307,19 +317,55 @@ class Domain(TerraformObject):
 
 
     @classmethod
+    def get_domain(self, fqdn):
+        split_domain = fqdn.split('.')
+        split_domain_length = len(split_domain)
+
+        # Parse out the TLD and root domain
+        root_domain = split_domain[split_domain_length - 2]
+        top_level_domain = split_domain[split_domain_length - 1]
+        domain = f'{root_domain}.{top_level_domain}'
+
+        return domain
+
+    @classmethod
+    def get_subdomain(self, fqdn):
+        split_domain = fqdn.split('.')
+        split_domain = split_domain[0:len(split_domain) - 2]
+
+        subdomain = ''.join(split_domain)
+
+        return subdomain
+        
+
+    @classmethod
     def from_dict(self, dict):
-        return Domain(dict['domain'], dict['provider'])
+        domain = Domain(dict['domain'], dict['provider'])
+
+        for record in dict['domain_records']:
+            self.add_record(record['subdomain'], record['record_type'], record['value'])
+
+        return domain
     
 
-class DomainRecord(TerraformObject):
-    """Base class for representing a domain record entry (such as A record or NS record)"""
+    class __DomainRecord:
+        """Base class for representing a domain record entry (such as A record or NS record)"""
 
-    def __init__(self, provider, subdomain, record_type):
-        self.subdomain = subdomain
-        self.safe_subdomain = subdomain.replace('.', '-')
-        self.record_type = record_type
+        def __init__(self, subdomain, record_type, value):
+            self.subdomain = subdomain
+            self.safe_subdomain = subdomain.replace('.', '-')
+            self.record_type = record_type
+            self.value = value
 
-        TerraformObject.__init__(self, provider, 'domain')
+        
+        def to_dict(self):
+            self_dict = {
+                'subdomain': self.subdomain,
+                'record_type': self.record_type,
+                'value': self.value
+            }
+
+            return self_dict
         
 
 #################################################################################################################
@@ -540,50 +586,3 @@ class Redirector(Server):
         self.proxy_to = proxy_to
 
         Server.__init__(self, name, provider, 'redirector', domain_map, redirector_type=redirector_type, proxy_to=proxy_to)
-
-
-    @classmethod
-    def get_implemented_redirectors(self):
-        redirector_types = ['https', 'dns', 'custom']
-        return redirector_types
-
-
-    @classmethod
-    def from_shorthand_notation(self, shorthand):
-        # Import functions needed
-        from core import build_resource_domain_map, generate_random_name
-
-        # Parse out the defined types
-        redirector_definition = shorthand.split(':')
-        provider = redirector_definition[0]
-        protocol = redirector_definition[1]
-
-        # Check provided length
-        if len(redirector_definition) < 2:
-            LogHandler.critical(f'Invalid redirector definition provider provided: "{shorthand}". Please use one of the proper format of "<provider>:<protocol>:<domain>:<registrar>" for the redirector.')
-
-        # Check if provider is in our list of implemented providers
-        if provider not in TerraformObject.get_terraform_mappings(simple_list=True):
-            LogHandler.critical(f'Invalid redirector provider provided: "{provider}". Please use one of the implemented redirectors: {TerraformObject.get_terraform_mappings(simple_list=True)}')
-        
-        # Check if protocol supported as given by the user
-        if protocol not in self.get_implemented_redirectors():
-            LogHandler.critical(f'Invalid redirector type provided: "{protocol}". Please use one of the implemented redirectors: {self.get_implemented_redirectors()}')
-
-        # Try parsing out a domain as provided
-        redirector_domain_map = []
-        if len(redirector_definition) >= 3:
-            domain = redirector_definition[2]
-            d_provider = redirector_definition[3]
-            redirector_domain = Domain(domain, d_provider)
-            redirector_domain = build_resource_domain_map(protocol, redirector_domain)
-            redirector_domain_map.append(redirector_domain)
-        else:
-            if not len(redirector_definition) == 2:
-                LogHandler.critical(f'Invalid redirector provided: "{shorthand}". Please make sure you define EITHER only the "<provider>:<protocol>" OR the "<provider>:<protocol>:<domain>:<registrar>"')
-            LogHandler.warn(f'Redirector provided without domain: "{shorthand}". Building without any domain.')                
-
-        name = generate_random_name()
-        redirector_name = f'{name}-{protocol}'
-
-        return Redirector(redirector_name, provider, redirector_domain_map, protocol, None)

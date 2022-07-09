@@ -1,11 +1,13 @@
 
-resource "godaddy_domain_record" "record-{{ record.safe_subdomain }}_{{ root_domain }}" {
+{% for record in domain_records %}
+resource "godaddy_domain_record" "{{ record.safe_subdomain }}-{{ uuid }}" {
   domain = "{{ domain }}"
 
   record {
-    data = {{ resource.terraform_resource_name }}.{{ resource.uuid }}.{{ resource.terraform_ip_reference }}
+    data = {{ record.value }}
     name = "{{ record.subdomain }}"
     port = 0
     type = "{{ record.record_type }}"
   }
 }
+{% endfor %}

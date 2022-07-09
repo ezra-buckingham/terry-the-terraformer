@@ -116,10 +116,12 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     ctx.obj['config_contents'] = config_contents
     ctx.obj['safe_operation_name'] = re.sub(r'[^a-zA-Z]', '', operation) # Strip out only letters
     ctx.obj['op_directory'] = project_directory.joinpath(operation)
+    ctx.obj['all_resources'] = []  # List of all resources 
+
+    # Sets to track all the items we need one and only one of for each build / provider
     ctx.obj['required_providers'] = set()
-    ctx.obj['server_resources'] = []  # List of resources (teamservers, redirectors) constituting the infrastructure
-    ctx.obj['domain_resources'] = []
-    ctx.obj['all_resources'] = []  # List of resources (teamservers, redirectors), including redirectors (which are children objects of a resource)
+    ctx.obj['required_ssh_keys'] = set()
+    ctx.obj['required_domains'] = set()
     
     ctx.obj = {**ctx.obj, **ctx.params}
 
@@ -172,36 +174,36 @@ def destroy(ctx_obj, recursive):
 
 
 @cli.group(name='create', chain=True)
-@click.pass_context
-def create(ctx):
+@click.pass_obj
+def create(ctx_obj):
     """Create a new deployment"""
 
-    LogHandler.info(f'Creating the "{ ctx.obj["operation"] }" plan')
+    LogHandler.info(f'Creating the "{ ctx_obj["operation"] }" plan')
 
     # Prepare all required handlers
     prepare_core_handlers()
 
-    operation_name = ctx.obj["operation"]
-    ctx.obj['build_uuid'] = str(uuid4())
+    operation_name = ctx_obj["operation"]
+    ctx_obj['build_uuid'] = str(uuid4())
 
     # Check for certificates directory
-    certificates_directory = Path(ctx.obj['project_directory']).joinpath('.certificates')
+    certificates_directory = Path(ctx_obj['project_directory']).joinpath('.certificates')
     if not certificates_directory.exists():
         LogHandler.warn('Certificates directory not found in project directory, creating that now...')
         certificates_directory.mkdir(parents=True)
 
     # If the operation directory doesn't exist, create the skeleton for it as well as all other resources required
-    if not Path(ctx.obj['op_directory']).exists():
+    if not Path(ctx_obj['op_directory']).exists():
         LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable)')
-        Path(ctx.obj['op_directory']).mkdir()
+        Path(ctx_obj['op_directory']).mkdir()
         # Does not account for situations where op_directory exists but these children do not
         for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
-            Path(ctx.obj['op_directory']).joinpath(path).mkdir(parents=True)
+            Path(ctx_obj['op_directory']).joinpath(path).mkdir(parents=True)
 
         # Generate the SSH Keys and write them to disk
         public_key, private_key = generate_ssh_key()
-        key_file = Path(ctx.obj['op_directory']).joinpath(f'{operation_name}_key')
-        pub_key_file = Path(ctx.obj['op_directory']).joinpath(f'{operation_name}_key.pub')
+        key_file = Path(ctx_obj['op_directory']).joinpath(f'{operation_name}_key')
+        pub_key_file = Path(ctx_obj['op_directory']).joinpath(f'{operation_name}_key.pub')
         pub_key_file.write_bytes(public_key)
         key_file.write_bytes(private_key)
         os.chmod(str(key_file), 0o700)
@@ -211,13 +213,17 @@ def create(ctx):
 
     # If the directory exists, we must check the flags supplied to see what Terry should do
     else: 
-        LogHandler.warn(f'A plan with the name "{ operation_name }" already exists in "{ ctx.obj["op_directory"] }"')
-        if not Path(ctx.obj["op_directory"]).joinpath('terraform/terraform.tfstate').exists():
+        LogHandler.warn(f'A plan with the name "{ operation_name }" already exists in "{ ctx_obj["op_directory"] }"')
+        if not Path(ctx_obj["op_directory"]).joinpath('terraform/terraform.tfstate').exists():
             LogHandler.warn(f'No terraform state found for "{ operation_name }", continuing with build regardless of "-f" / "--force" flag.')
-        elif not ctx.obj['force']:
+        elif not ctx_obj['force']:
             LogHandler.critical(f'Terraform state found for "{ operation_name }". Please choose a new operation name, new deployment path, or use the "-f" / "--force" flag. Just note that when using the force flag you may overwrite existing Terraform resources.')
         else:
             LogHandler.warn('Continuing since "-f" / "--force" was supplied.')
+    
+    # Load the public key so we can build the ssh key resources later
+    public_key, private_key = get_operation_ssh_key_pair()
+    ctx_obj['ssh_pub_key'] = public_key
     
 
 @create.result_callback()
@@ -229,13 +235,9 @@ def build_infrastructure(ctx_obj, resources):
 
     LogHandler.debug('Build looks good! Terry, take it away!')
 
-    # Load the public key so we can build the ssh key resources later
-    public_key, private_key = get_operation_ssh_key_pair()
-    ctx_obj['ssh_pub_key'] = public_key
-
     # Create the terraform plan and build it 
     LogHandler.info('Building Terraform plan')
-    plan = TerraformHandler.build_plan(ctx_obj)
+    plan = build_terraform_plan()
     plan_file = Path(ctx_obj['op_directory']).joinpath(f'terraform/{ ctx_obj["operation"] }_plan.tf')
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
@@ -245,7 +247,7 @@ def build_infrastructure(ctx_obj, resources):
     LogHandler.info('Terraform apply successful!')
     return_code, stdout, stderr = ctx_obj['terraform_handler'].show_state(json=True)
     results = json.loads(stdout)['values']['root_module']['resources']
-    TerraformHandler.map_values(ctx_obj, results)
+    map_terraform_values_to_resources(results)
 
     # Configure Nebula
     if not ctx_obj['no_nebula']:
@@ -347,98 +349,133 @@ def reconfigure(ctx_obj):
 
 
 @click.command(name='server')
-@click.option('--provider', '-p', required=True, type=click.Choice(TerraformObject.get_terraform_mappings(simple_list=True)), help='''
-    The cloud/infrastructure provider to use when creating the server
+@click.option('--provider', '-p', required=True, type=click.Choice(TerraformObject.get_terraform_mappings(simple_list=True, type='server')), help='''
+    The cloud provider to use when creating the server
     ''')
 @click.option('--type', '-t', required=True, type=click.Choice(get_implemented_server_types()), help='''
     The type of server to create
     ''')
-@click.option('--name', '-n', required=False, type=str, help='''
+@click.option('--name', '-sN', required=False, type=str, help='''
     Name of the server (used for creating corresponding DNS records if you use the "domain" command)
     ''')
 @click.option('--container', '-cT', type=str, multiple=True, help='''
     Containers to install onto the server
     ''')
-@click.option('--redirector_type', '-rT', type=str, multiple=True, help='''
+@click.option('--redirector_type', '-rT', type=click.Choice(get_implemented_redirector_types()), help='''
     Type redirector to build, with optional domain specified for that redirector formatted as "<provider>:<protocol>:<domain>:<registrar>" 
     (Example: https redirector in AWS at domain example.com with registrar AWS should be "aws:https:example.com:aws)"
     ''')
 @click.option('--redirect_to', '-r2', type=str, help='''
     Domain to redirect to / impersonate (only deployed with categorize servers)
     ''')
-@click.option('--domain', '-d', multiple=True, type=str, help='''
+@click.option('--fqdn', '-d', multiple=True, type=str, help='''
     Domain and registrar to use in creation of an A record for the resource formatted as "<domain>:<registrar>" (Example: domain example.com with registrar aws should be "example.com:aws)"
     ''')
-@click.pass_obj
-def server(ctx_obj, provider, type, name, redirector_type, redirect_to, domain, container):
+@click.pass_context
+def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, container):
     """Create a server resource"""
-
-    resources = []
 
     if not name:
         name = generate_random_name()
 
-    # Build the redirector objects
-    for redirector in redirector_type:
-        # Parse out the defined types
-        redirector = Redirector.from_shorthand_notation(redirector)
-        resources.append(redirector)
-        
-    # Build the domain object
-    domain_map = []
-    for item in domain:
-        item = item.split(':')
-        if len(item) != 2: 
+    # Check if we have an SSH Key for that provider provisioned
+    if provider not in ctx.obj['required_ssh_keys']:
+        LogHandler.debug(f'No SSH Key not found for "{ provider }", I will add one to the build for you')
+        ssh_key_name = f'{ ctx.obj["operation"] }_{ provider }_key'
+        ssh_key = SSHKey(provider, ssh_key_name, ctx.obj['ssh_pub_key'])
+        ctx.obj['required_ssh_keys'].add(provider)
+        ctx.obj['all_resources'].append(ssh_key)
+
+    # Parse the domain strings for later processing
+    for domain_record in fqdn:
+        domain_record = domain_record.split(':')
+        if len(domain_record) != 2: 
             LogHandler.critical(f'Domain expects be formated as "<domain>:<registrar>" (example: "example.com:aws")')
-        domain = Domain(item[0], item[1])
-        domain_map.append(domain)
 
     # Build the container objects
     containers = [Container(x) for x in list(container)]
 
     # Build the server object
-    if type == 'teamserver':
-        server = Teamserver(name, provider, domain_map, containers)
-    elif type == 'redirector':
-        server = Redirector(name, provider, domain_map, redirector_type, redirect_to)
+    if type == 'bare':
+        server = Bare(name, provider, {}, containers)
+        ctx.obj['all_resources'].append(server)
+    elif type == 'teamserver':
+        server = Teamserver(name, provider, {}, containers)
+        ctx.obj['all_resources'].append(server)
     elif type == 'categorize':
-        server = Categorize(name, provider, domain_map, redirect_to)
-    elif type == 'bare':
-        server = Bare(name, provider, domain_map, containers)
+        server = Categorize(name, provider, {}, redirect_to)
+        ctx.obj['all_resources'].append(server)
     elif type == 'lighthouse':
-        server = Lighthouse(name, provider, domain_map)
+        server = Lighthouse(name, provider, {})
+        ctx.obj['all_resources'].append(server)
+    elif type == 'redirector':
+        server = Redirector(name, provider, {}, redirector_type, redirect_to)
+        ctx.obj['all_resources'].append(server)
+        if redirector_type == 'dns':
+            for domain_record in fqdn:
+                domain_record = domain_record.split(':')
+                base_domain = Domain.get_domain(domain_record[0])
+                domain_value = f'ns1.{base_domain}'
+                ctx.invoke(domain, provider=domain_record[1], domain=domain_record[0], type='NS', value=domain_value)
+                ctx.invoke(domain, provider=domain_record[1], domain=domain_value, type='A', server_name=server.uuid)
+                return
     else:
         LogHandler.critical(f'Got unknown server type: "{type}"')
 
-    # Provide the server with the redirectors and append to build
-    resources.append(server)
-    ctx_obj['server_resources'] += resources
-    ctx_obj['all_resources'] += resources
-
-    return
+    # Check if we were given a domain
+    for domain_record in fqdn:
+        domain_record = domain_record.split(':')
+        ctx.invoke(domain, provider=domain_record[1], domain=domain_record[0], type='A', server_name=server.uuid, nameserver=False)
 
 
 @click.command(name='domain')
-@click.option('--provider', '-p', required=True, type=click.Choice(TerraformObject.get_terraform_mappings(simple_list=True)), help='''
+@click.option('--provider', '-p', required=True, type=click.Choice(TerraformObject.get_terraform_mappings(simple_list=True, type='domain')), help='''
     The cloud/infrastructure provider to use when creating the server
     ''')
 @click.option('--domain', '-d', required=True, type=str, help='''
-    FQDN to use in creation of an record type <type>"
+    FQDN to use in creation of an record type "<type>" (if no subdomain provided, the root will be used)
     ''')
 @click.option('--type', '-t', type=str, default='A', help='''
     The type of record to create
     ''')
-@click.option('--value', '-v', required=True, type=str, help='''
+@click.option('--value', '-v', required=False, type=str, help='''
     Value of the record (use this if you have a STATIC DNS record that doesn't depend on dynamic data returned from Terraform)
     ''')
-@click.option('--points_to', '-p2', required=True, type=str, help='''
-    Name of the resource's public IP that you want to populate the value of the record (a resource with this name must exist in the build)
+@click.option('--server_name', '-sN', required=False, type=str, help='''
+    Name / UUID of the server resource whose public IP that you want to populate the value of the record (a resource with this name / uuid must exist in the build)
+    ''')
+@click.option('--nameserver', '-nS', default=False, is_flag=True, help='''
+    Name / UUID of the server resource whose public IP that you want to populate the value of the record (a resource with this name / uuid must exist in the build)
     ''')
 @click.pass_obj
-def domain(ctx_obj, provider, type, redirector_type, redirect_to, domain, container):
-    """Create a domain record"""
+def domain(ctx_obj, provider, domain, type, value, server_name, nameserver):
+    """Create a domain resource"""
 
+    # Build a domain object so it get's parsed properly
+    domain_obj = Domain(domain, provider)
+
+    # Check if we have this domain already
+    domain_zone = f'{ domain_obj.domain }'
+    if domain_zone not in ctx_obj['required_domains']:
+        LogHandler.debug(f'Domain zone not found for { provider }, I will add one to the build for you')
+        ctx_obj['required_domains'].add(domain_zone)
+        ctx_obj['all_resources'].append(domain_obj)
     
+    domain_obj_index = get_domain_zone_index_from_build(domain_zone)
+
+    # Check that we have at least the value OR server_name
+    if not value and server_name:
+        server = get_server_from_uuid_or_name(server_name)
+        value = f'{ server.terraform_resource_name }.{ server.uuid }.{ server.terraform_ip_reference }'
+    elif value and server_name:
+        LogHandler.critical(f'Domain expects to have either "-v" / "--value" OR "-sN" / "--server_name" to be set. Make sure one or the other is set when building a domain')
+    else:
+        # Wrap the value in double quotes (if it is not a dynamic terraform reference, it should be represented as a string in the plan)
+        value = f'"{ value }"'
+
+    # Add the domain record to the domain object
+    subdomain = Domain.get_subdomain(domain)
+    ctx_obj['all_resources'][domain_obj_index].add_record(subdomain, type, value)
 
 
 if __name__ == "__main__":

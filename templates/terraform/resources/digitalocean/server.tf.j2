@@ -21,7 +21,7 @@ resource "digitalocean_droplet" "{{ uuid }}" { # Value provided by Jinja
   name = "{{ operation.replace("_","-") + '-' + name }}"{# Need to replace underscores since this is set as the droplet hostname #} # Value provided by Jinja 
   region = "nyc3"
   size = "{{ terraform_size_reference }}"
-  ssh_keys = [ digitalocean_ssh_key.{{ operation + '_' + provider + '_key' }}.fingerprint ] # Value provided by Jinja
+  ssh_keys = [ digitalocean_ssh_key.{{ provider }}-{{ build_uuid }}.fingerprint ] # Value provided by Jinja
 }
 
 # Attach the Volume

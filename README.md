@@ -25,15 +25,7 @@ And not to mention all the people in BloodHound slack that I pestered for gettin
 
 There are known issues to Terry. Here are some of the ones I have identified:
 
-* No central managment of wildcard Certs
-* No validation of credentials on destroy
-* Lack of checking how many IP addresses are available in the Nebula subnet
-* Resource naming is not consistent and they need to be given the need for PTR records for SMTP (for the future)
-* UFW rules to containers must run both `ufw allow` and `ufw route allow` to allow ufw to manage the docker routes
-* Logging errors to the log file will won't print the stack trace
 * No central managment of wildcard certs (wildcard cert generation likely coming in the future)
-* Nebula path required even when not being used
-* Need to check for `None` in remote config
 * PTR records need to be determined before SMTP will work
   * DigitalOcean will create PTR records from the name of the host, need to make sure name of host is the FQDN
 
