@@ -1,9 +1,7 @@
 import base64
 import hashlib
-from operator import sub
 from pathlib import Path
 from uuid import uuid4
-from xml import dom
 
 import yaml
 
@@ -96,15 +94,8 @@ class AnsibleControlledObject:
             self_dict['domain_to_impersonate'] = self.domain_to_impersonate
 
         # Check for presence of domains
-        if hasattr(self, 'domain_map') and self.domain_map is not None:
-            self_dict['domain_map'] = []
-            for domain in self.domain_map:
-                for domain_record in domain.domain_records:
-                    if len(domain_record.subdomain) > 0:
-                        fqdn = f'{domain_record.subdomain}.{domain.domain}'
-                    else:
-                        fqdn = f'{domain.domain}'
-                    self_dict['domain_map'].append(fqdn)
+        if hasattr(self, 'domain') and self.domain is not None:
+            self_dict['domain'] = self.domain
 
         # Check for a redirector type
         if hasattr(self, 'redirector_type') and self.redirector_type is not None:
@@ -250,10 +241,11 @@ class SSHKey(TerraformObject):
     def __init__(self, provider, name, public_key=None, private_key=None):
         self.provider = provider
         self.name = name
+        self.resource_type = 'ssh_key'
         self.public_key = public_key
         self.private_key = private_key
 
-        TerraformObject.__init__(self, provider, 'ssh_key')
+        TerraformObject.__init__(self, provider, self.resource_type)
 
 
     def get_fingerprint(self):
@@ -267,8 +259,9 @@ class SSHKey(TerraformObject):
     def to_dict(self):
         self_dict = {
             'name': self.name,
-            'public_key': self.public_key,
-            'private_key': self.private_key
+            'provider': self.provider,
+            'public_key': self.public_key.decode('utf-8'),
+            'private_key': self.private_key.decode('utf-8') if self.private_key else None
         }
 
         return self_dict
@@ -276,7 +269,10 @@ class SSHKey(TerraformObject):
 
     @classmethod
     def from_dict(self, dict):
-        return SSHKey(dict['name'], dict['public_key'], dict['private_key'])
+        encoded_public_key = dict['public_key'].encode('utf-8') if dict.get('public_key', None) else None
+        encoded_private_key = dict['private_key'].encode('utf-8') if dict.get('private_key', None) else None
+
+        return SSHKey( dict['provider'], dict['name'], encoded_public_key, encoded_private_key)
 
 
 #################################################################################################################
@@ -289,8 +285,9 @@ class Domain(TerraformObject):
 
     def __init__(self, domain, provider):
         self.domain = domain
+        self.resource_type = 'domain'
 
-        TerraformObject.__init__(self, provider, 'domain') 
+        TerraformObject.__init__(self, provider, self.resource_type) 
 
         self.domain_records = []
         split_domain = self.domain.split('.')
@@ -310,7 +307,8 @@ class Domain(TerraformObject):
     def to_dict(self):
         self_dict = {
             'domain': self.domain,
-            'provider': self.provider
+            'provider': self.provider,
+            'domain_records': [ record.to_dict() for record in self.domain_records ]
         }
 
         return self_dict
@@ -343,7 +341,7 @@ class Domain(TerraformObject):
         domain = Domain(dict['domain'], dict['provider'])
 
         for record in dict['domain_records']:
-            self.add_record(record['subdomain'], record['record_type'], record['value'])
+            domain.add_record(record['subdomain'], record['record_type'], record['value'])
 
         return domain
     
@@ -376,13 +374,13 @@ class Domain(TerraformObject):
 class Server(AnsibleControlledObject, TerraformObject):
     """Base class for representing servers"""
 
-    def __init__(self, name, provider, server_type, domain_map, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None):
+    def __init__(self, name, provider, server_type, domain, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None):
         self.resource_type = 'server'
         self.name = name
         self.server_type = server_type
         self.nebula_ip = None
         self.public_ip = None
-        self.domain_map = domain_map
+        self.domain = domain
         self.containers = containers
 
         # Specific Properties for Server Types
@@ -391,7 +389,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         self.proxy_to = proxy_to
 
         # Init the Parents
-        TerraformObject.__init__(self, provider, 'server')   
+        TerraformObject.__init__(self, provider, self.resource_type)   
         AnsibleControlledObject.__init__(self)
 
         # Get the config values
@@ -466,7 +464,8 @@ class Server(AnsibleControlledObject, TerraformObject):
             'provider': self.provider,
             'server_type': self.server_type,
             'nebula_ip': self.nebula_ip,
-            'public_ip': self.public_ip
+            'public_ip': self.public_ip,
+            'domain': self.domain
         }
 
         # Check some of the other potential attributes
@@ -492,7 +491,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         uuid = dict['uuid']
         name = dict['name']
         provider = dict['provider']
-        domain_map = [] # TODO
+        domain = dict['domain'] # TODO
         type = dict['server_type']
         public_ip = dict['public_ip']
 
@@ -509,15 +508,15 @@ class Server(AnsibleControlledObject, TerraformObject):
 
         # Build the server back
         if type == 'teamserver':
-            server = Teamserver(name, provider, domain_map, containers)
+            server = Teamserver(name, provider, domain, containers)
         elif type == 'redirector':
-            server = Redirector(name, provider, domain_map, redirector_type, redirect_to)
+            server = Redirector(name, provider, domain, redirector_type, redirect_to)
         elif type == 'categorize':
-            server = Categorize(name, provider, domain_map, redirect_to)
+            server = Categorize(name, provider, domain, redirect_to)
         elif type == 'bare':
-            server = Bare(name, provider, domain_map, containers)
+            server = Bare(name, provider, domain, containers)
         elif type == 'lighthouse':
-            server = Lighthouse(name, provider, domain_map)
+            server = Lighthouse(name, provider, domain)
         
         server.uuid = uuid
         server.public_ip = public_ip
@@ -534,45 +533,45 @@ class Server(AnsibleControlledObject, TerraformObject):
 class Bare(Server):
     """Class for representing a bare server, without any custom config"""
 
-    def __init__(self, name, provider, domain_map, containers):
-        Server.__init__(self, name, provider, 'bare', domain_map, containers)
+    def __init__(self, name, provider, domain, containers):
+        Server.__init__(self, name, provider, 'bare', domain, containers)
 
 
 class Lighthouse(Server):
     """Class for representing a Nebula Lighthouse server"""
 
-    def __init__(self, name, provider, domain_map):
-        Server.__init__(self, name, provider, 'lighthouse', domain_map)
+    def __init__(self, name, provider, domain):
+        Server.__init__(self, name, provider, 'lighthouse', domain)
 
 
 class Mailserver(Server):
     """Class for representing a mailserver"""
 
-    def __init__(self, name, provider, domain_map, containers, mailserver_type):
+    def __init__(self, name, provider, domain, containers, mailserver_type):
         self.containers = containers + [ mailserver_type ]
 
-        Server.__init__(self, name, provider, 'mailserver', domain_map, containers)
+        Server.__init__(self, name, provider, 'mailserver', domain, containers)
 
 
 class Teamserver(Server):
     """Class for Teamservers, the piece of infrastructure running command and control software."""
 
-    def __init__(self, name, provider, domain_map, containers):
-        if domain_map and len(domain_map) > 0:
+    def __init__(self, name, provider, domain, containers):
+        if domain and len(domain) > 0:
             LogHandler.warn('Domain provided for a Teamserver, this is not reccomended, but you do you.')
 
-        Server.__init__(self, name, provider, 'teamserver', domain_map, containers)
+        Server.__init__(self, name, provider, 'teamserver', domain, containers)
 
 
 class Categorize(Server):
     """Class for Categorization servers, infrastructure that allows us to have c2 domains"""
 
-    def __init__(self, name, provider, domain_map, domain_to_impersonate):
+    def __init__(self, name, provider, domain, domain_to_impersonate):
 
-        Server.__init__(self, name, provider, 'categorize', domain_map, containers=[], domain_to_impersonate=domain_to_impersonate)
+        Server.__init__(self, name, provider, 'categorize', domain, containers=[], domain_to_impersonate=domain_to_impersonate)
         
         # We can only have one Categorization Server in a build request
-        if len(self.domain_map) != 1:
+        if len(self.domain) != 1:
             LogHandler.critical(f'Categorization Error: a domain map is required and with only one domain specified')
         if not self.domain_to_impersonate:
             LogHandler.critical(f'Categorization Error: a domain to impersonate required')
@@ -581,8 +580,8 @@ class Categorize(Server):
 class Redirector(Server):
     """Class for Redirectors, providing obfuscation layer between internet / victim and teamserver(s)."""
 
-    def __init__(self, name, provider, domain_map, redirector_type, proxy_to):
+    def __init__(self, name, provider, domain, redirector_type, proxy_to):
         self.redirector_type = redirector_type
         self.proxy_to = proxy_to
 
-        Server.__init__(self, name, provider, 'redirector', domain_map, redirector_type=redirector_type, proxy_to=proxy_to)
+        Server.__init__(self, name, provider, 'redirector', domain, redirector_type=redirector_type, proxy_to=proxy_to)

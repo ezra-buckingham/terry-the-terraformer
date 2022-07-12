@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-from email.policy import default
 import json
 import logging
 import os
@@ -7,7 +6,6 @@ import re
 import sys
 import click
 import yaml
-import traceback
 from pathlib import Path
 
 # Local Imports
@@ -116,7 +114,7 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     ctx.obj['config_contents'] = config_contents
     ctx.obj['safe_operation_name'] = re.sub(r'[^a-zA-Z]', '', operation) # Strip out only letters
     ctx.obj['op_directory'] = project_directory.joinpath(operation)
-    ctx.obj['all_resources'] = []  # List of all resources 
+    ctx.obj['resources'] = []  # List of all resources 
 
     # Sets to track all the items we need one and only one of for each build / provider
     ctx.obj['required_providers'] = set()
@@ -137,7 +135,7 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     ''')
 @click.pass_obj
 def destroy(ctx_obj, recursive):
-    """Destroy the infrastructure built by terraform"""
+    """Destroy the deployment"""
 
     LogHandler.info(f'Destroying the "{ ctx_obj["operation"] }" plan')
 
@@ -231,6 +229,7 @@ def create(ctx_obj):
 def build_infrastructure(ctx_obj, resources):
     # Make sure we have credentials for each of the providers
     validate_credentials(check_containers=True)
+
     prepare_nebula_handler()
 
     LogHandler.debug('Build looks good! Terry, take it away!')
@@ -253,7 +252,7 @@ def build_infrastructure(ctx_obj, resources):
     if not ctx_obj['no_nebula']:
         LogHandler.info('Setting up Nebula configurations and certificates')
         ctx_obj['nebula_handler'].generate_ca_certs()
-        for resource in ctx_obj['all_resources']:
+        for resource in [ server for server in  ctx_obj['resources'] if isinstance(server, Server) ]:
             assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.name)
             resource.nebula_ip = assigned_nebula_ip
         extract_nebula_config()
@@ -312,7 +311,10 @@ def refresh(ctx_obj):
     results = json.loads(stdout)['values']['root_module']['resources']
 
     # Map the results from terraform.show() results back into the resource objects
-    TerraformHandler.map_values(ctx_obj, results)
+    map_terraform_values_to_resources(results)
+
+    # Write the refreshed data back to the manifest
+    create_build_manifest(full_replace=True)
 
     LogHandler.info('Terry refresh complete! Refreshing, huh?')
     
@@ -384,48 +386,57 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
         ssh_key_name = f'{ ctx.obj["operation"] }_{ provider }_key'
         ssh_key = SSHKey(provider, ssh_key_name, ctx.obj['ssh_pub_key'])
         ctx.obj['required_ssh_keys'].add(provider)
-        ctx.obj['all_resources'].append(ssh_key)
+        ctx.obj['resources'].append(ssh_key)
 
     # Parse the domain strings for later processing
-    for domain_record in fqdn:
-        domain_record = domain_record.split(':')
-        if len(domain_record) != 2: 
+    domains = [ *list(fqdn) ]
+    for domain_index, domain_record in enumerate(domains):
+        domains[domain_index] = domain_record.split(':')
+        if len(domains[domain_index]) != 2: 
             LogHandler.critical(f'Domain expects be formated as "<domain>:<registrar>" (example: "example.com:aws")')
 
-    # Build the container objects
+    # Build the container objects & priority domain
     containers = [Container(x) for x in list(container)]
+    try: priority_domain = domains[0][0] 
+    except IndexError: priority_domain = None
 
     # Build the server object
     if type == 'bare':
-        server = Bare(name, provider, {}, containers)
-        ctx.obj['all_resources'].append(server)
+        server = Bare(name, provider, priority_domain, containers)
+        ctx.obj['resources'].append(server)
     elif type == 'teamserver':
-        server = Teamserver(name, provider, {}, containers)
-        ctx.obj['all_resources'].append(server)
+        server = Teamserver(name, provider, priority_domain, containers)
+        ctx.obj['resources'].append(server)
     elif type == 'categorize':
-        server = Categorize(name, provider, {}, redirect_to)
-        ctx.obj['all_resources'].append(server)
+        server = Categorize(name, provider, priority_domain, redirect_to)
+        ctx.obj['resources'].append(server)
     elif type == 'lighthouse':
-        server = Lighthouse(name, provider, {})
-        ctx.obj['all_resources'].append(server)
+        server = Lighthouse(name, provider, priority_domain)
+        ctx.obj['resources'].append(server)
     elif type == 'redirector':
-        server = Redirector(name, provider, {}, redirector_type, redirect_to)
-        ctx.obj['all_resources'].append(server)
-        if redirector_type == 'dns':
-            for domain_record in fqdn:
-                domain_record = domain_record.split(':')
-                base_domain = Domain.get_domain(domain_record[0])
-                domain_value = f'ns1.{base_domain}'
-                ctx.invoke(domain, provider=domain_record[1], domain=domain_record[0], type='NS', value=domain_value)
-                ctx.invoke(domain, provider=domain_record[1], domain=domain_value, type='A', server_name=server.uuid)
-                return
+        server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
+        # Check how many domains we have set
+        if len(domains) == 0:
+            LogHandler.error('No domains provided for redirector, this may cause issues with your redirector (depending on the protocol)')
+        elif redirector_type == 'dns':
+            # Get the domain record and edit the server object
+            main_domain = domains.pop(0)
+            base_domain = Domain.get_domain(main_domain[0])
+            ns_domain_value = f'ns1.{base_domain}'
+            server.domain = ns_domain_value
+            ctx.obj['resources'].append(server)
+
+            # Build the Domain objects
+            ctx.invoke(domain, provider=main_domain[1], domain=main_domain[0], type='NS', value=ns_domain_value)
+            ctx.invoke(domain, provider=main_domain[1], domain=ns_domain_value, type='A', server_name=server.uuid)
+        else:
+            ctx.obj['resources'].append(server)
     else:
         LogHandler.critical(f'Got unknown server type: "{type}"')
 
     # Check if we were given a domain
-    for domain_record in fqdn:
-        domain_record = domain_record.split(':')
-        ctx.invoke(domain, provider=domain_record[1], domain=domain_record[0], type='A', server_name=server.uuid, nameserver=False)
+    for domain_record in domains:
+        ctx.invoke(domain, provider=domain_record[1], domain=domain_record[0], type='A', server_name=server.uuid)
 
 
 @click.command(name='domain')
@@ -444,11 +455,8 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
 @click.option('--server_name', '-sN', required=False, type=str, help='''
     Name / UUID of the server resource whose public IP that you want to populate the value of the record (a resource with this name / uuid must exist in the build)
     ''')
-@click.option('--nameserver', '-nS', default=False, is_flag=True, help='''
-    Name / UUID of the server resource whose public IP that you want to populate the value of the record (a resource with this name / uuid must exist in the build)
-    ''')
 @click.pass_obj
-def domain(ctx_obj, provider, domain, type, value, server_name, nameserver):
+def domain(ctx_obj, provider, domain, type, value, server_name):
     """Create a domain resource"""
 
     # Build a domain object so it get's parsed properly
@@ -459,7 +467,7 @@ def domain(ctx_obj, provider, domain, type, value, server_name, nameserver):
     if domain_zone not in ctx_obj['required_domains']:
         LogHandler.debug(f'Domain zone not found for { provider }, I will add one to the build for you')
         ctx_obj['required_domains'].add(domain_zone)
-        ctx_obj['all_resources'].append(domain_obj)
+        ctx_obj['resources'].append(domain_obj)
     
     domain_obj_index = get_domain_zone_index_from_build(domain_zone)
 
@@ -475,7 +483,7 @@ def domain(ctx_obj, provider, domain, type, value, server_name, nameserver):
 
     # Add the domain record to the domain object
     subdomain = Domain.get_subdomain(domain)
-    ctx_obj['all_resources'][domain_obj_index].add_record(subdomain, type, value)
+    ctx_obj['resources'][domain_obj_index].add_record(subdomain, type, value)
 
 
 if __name__ == "__main__":

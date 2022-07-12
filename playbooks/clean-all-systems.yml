@@ -5,10 +5,11 @@
   become: true
   tasks:
 
-  - name: Verify UFW installed
+  - name: Verify UFW installed (install if not)
     apt:
       name: ufw
-      state: present
+      update_cache: yes
+      lock_timeout: 360
 
   - name: Remove terryites group from sudoers file (if present)
     ansible.builtin.lineinfile:
@@ -28,10 +29,6 @@
   - name: Determine existing users we need to remove
     set_fact:
       removed_users: "{{ existing_users.stdout_lines | difference(team_usernames) }}"
-
-  - name: Debug
-    debug:
-      msg: "{{ removed_users }}"
 
   - name: Delete removed user accounts
     user:

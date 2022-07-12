@@ -4,6 +4,8 @@ Errors Identified:
 
 Error: Error creating Volume: POST https://api.digitalocean.com/v2/volumes: 422 (request "d0f7873b-1bd4-408e-bfab-2f589faa5a73") failed to create volume: invalid volume name. names must be lowercase and alphanumeric
 
+
+
 #}
 
 # Create the Volume
@@ -18,7 +20,7 @@ resource "digitalocean_volume" "volume-{{ uuid }}" {
 # Create the Droplet
 resource "digitalocean_droplet" "{{ uuid }}" { # Value provided by Jinja
   image = "debian-11-x64"
-  name = "{{ operation.replace("_","-") + '-' + name }}"{# Need to replace underscores since this is set as the droplet hostname #} # Value provided by Jinja 
+  name = "{% if domain %}{{ domain }}{% else %}{{ name }}{% endif %}"{# DigitalOcean will set this as a PTR record for the IP if set to the domain name #} # Value provided by Jinja 
   region = "nyc3"
   size = "{{ terraform_size_reference }}"
   ssh_keys = [ digitalocean_ssh_key.{{ provider }}-{{ build_uuid }}.fingerprint ] # Value provided by Jinja

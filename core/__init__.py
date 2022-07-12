@@ -1,4 +1,3 @@
-from pydoc import cli
 import random
 import click
 import yaml
@@ -38,10 +37,10 @@ def prepare_nebula_handler(ctx_obj):
     """
 
     # Get all the lighthouses from the resources
-    lighthouses = [ x for x in ctx_obj["all_resources"] if isinstance(x, Lighthouse) ]
+    lighthouses = [ x for x in ctx_obj["resources"] if isinstance(x, Lighthouse) ]
     
     # Check with user if we want to build nebula when there are many servers in the build
-    if not ctx_obj['no_nebula'] and len([ resource for resource in ctx_obj['all_resources'] if isinstance(resource, Server) ]) > 1:
+    if not ctx_obj['no_nebula'] and len([ resource for resource in ctx_obj['resources'] if isinstance(resource, Server) ]) > 1:
         # Check to make sure we only have one lighthouse in the build
         if len(lighthouses) > 1:
             LogHandler.critical('Multiple Lighthouses found in build, Terry can only handle building one per deployment')
@@ -60,7 +59,7 @@ def prepare_nebula_handler(ctx_obj):
 
                 lighthouse = Lighthouse(lighthouse_name, provider, None)
                 ctx_obj["server_resources"].insert(0, lighthouse)
-                ctx_obj["all_resources"].insert(0, lighthouse)
+                ctx_obj["resources"].insert(0, lighthouse)
             else:
                 LogHandler.warn('Opting out of Nebula for this build')
                 ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
@@ -120,7 +119,7 @@ def prepare_and_run_ansible(ctx_obj):
     
     # Build the Ansible Inventory
     LogHandler.debug('Building Ansible inventory')  
-    AnsibleHandler.build_ansible_inventory(ctx_obj)
+    build_ansible_inventory()
 
     # Run all the Prep playbooks
     root_playbook_location = '../../../playbooks'
@@ -158,9 +157,11 @@ def read_build_manifest(ctx_obj):
         build_manifest_contents = {
             'build_uuid': ctx_obj['build_uuid'],
             'operation': ctx_obj['operation'],
-            'all_resources': []
+            'lighthouse_nebula_ip': None,
+            'lighthouse_nebula_ip': None,
+            'resources': []
         }
-        build_manifest_yaml = yaml.safe_dump(build_manifest_contents)
+        build_manifest_yaml = yaml.safe_dump(build_manifest_contents, sort_keys=True)
         build_manifest_file.write_text(build_manifest_yaml)
         return build_manifest_contents
 
@@ -182,16 +183,18 @@ def parse_build_manifest(ctx_obj):
     ctx_obj['build_uuid'] = build_manifest['build_uuid']
 
     # Check if there are resources listed in the build manifest and append to all resources
-    if build_manifest['all_resources'] and len(build_manifest['all_resources']) > 0:
-        for resource in build_manifest['all_resources']:
+    if build_manifest['resources'] and len(build_manifest['resources']) > 0:
+        for resource in build_manifest['resources']:
             resource_type, resource = list(resource.items())[0]
 
             if resource_type == 'server':
                 resource = Server.from_dict(resource)
             elif resource_type == 'domain':
-                resource = Domain.from_dict()
+                resource = Domain.from_dict(resource)
+            elif resource_type == 'ssh_key':
+                resource = SSHKey.from_dict(resource)
 
-            ctx_obj['all_resources'].append(resource)
+            ctx_obj['resources'].append(resource)
         
         extract_nebula_config()
 
@@ -199,7 +202,7 @@ def parse_build_manifest(ctx_obj):
 
 
 @click.pass_obj
-def create_build_manifest(ctx_obj):
+def create_build_manifest(ctx_obj, full_replace=False):
     """Create the build manifest with all the current build objects
 
     Args:
@@ -211,17 +214,20 @@ def create_build_manifest(ctx_obj):
     LogHandler.debug('Creating the build manifest')
 
     # Read in the existing build manifest
-    existing_build_manifest = parse_build_manifest()
+    existing_build_manifest = read_build_manifest()
+    if full_replace:
+        LogHandler.debug('Doing full replacement of the build manifest resources')
+        existing_build_manifest.pop('resources')
 
     # Get the items from the current build an create the new manifest
-    added_manifest_items = [ { resource.resource_type: resource.to_dict() } for resource in ctx_obj['all_resources'] ]
+    added_manifest_items = [ { resource.resource_type: resource.to_dict() } for resource in ctx_obj['resources'] ]
     new_manifest = {
         **existing_build_manifest,
-        'all_resources': added_manifest_items,
+        'resources': added_manifest_items,
         'lighthouse_nebula_ip': ctx_obj.get('lighthouse_nebula_ip'), 
         'lighthouse_public_ip': ctx_obj.get('lighthouse_public_ip')
     }
-    new_manifest_yaml = yaml.safe_dump(new_manifest)
+    new_manifest_yaml = yaml.safe_dump(new_manifest, sort_keys=True)
 
     # Write the new manifest out
     build_manifest = Path(ctx_obj['op_directory']).joinpath('.terry/build_manifest.yml')
@@ -245,7 +251,7 @@ def validate_credentials(ctx_obj, check_containers=True):
     required_providers = set()
     container_registry_credentials_checked = False
 
-    for resource in ctx_obj['all_resources']:
+    for resource in ctx_obj['resources']:
         required_providers.add(resource.provider)
 
         if hasattr(resource, 'containers') and len(resource.containers) and check_containers:
@@ -311,7 +317,7 @@ def extract_nebula_config(ctx_obj):
 
     LogHandler.debug('Getting the Lighthouse Public IP and Nebula IP from build manifest')
 
-    for resource in ctx_obj['all_resources']:
+    for resource in ctx_obj['resources']:
         if isinstance(resource, Lighthouse):
             ctx_obj['lighthouse_public_ip'] = resource.public_ip
             ctx_obj['lighthouse_nebula_ip'] = resource.nebula_ip
@@ -349,7 +355,7 @@ def get_domain_zone_index_from_build(ctx_obj, domain_zone):
         `domain (Domain)`: Domain zone
     """
 
-    for index, domain in enumerate(ctx_obj['all_resources']):
+    for index, domain in enumerate(ctx_obj['resources']):
         if isinstance(domain, Domain) and domain.domain == domain_zone:
             return index
 
@@ -358,18 +364,27 @@ def get_domain_zone_index_from_build(ctx_obj, domain_zone):
 
 @click.pass_obj
 def get_server_from_uuid_or_name(ctx_obj, resource_uuid_or_name):
-    """"""
+    """Return the reference to the server given the UUID or name
+
+    Args:
+        `resource_uuid_or_name (str)`: Name or UUID of the resource
+    Returns
+        `resource (Server)`: Reference to the resource 
+    """
 
     # Check if we were given a UUID 
     if len(resource_uuid_or_name) == 39 or len(resource_uuid_or_name) == 36:
         if len(resource_uuid_or_name) == 36:
             resource_uuid_or_name = f'id-{ resource_uuid_or_name }'
-        resource = [ server for server in  ctx_obj['all_resources'] if isinstance(server, Server) and server.uuid == resource_uuid_or_name ][0]
+        resource = [ server for server in  ctx_obj['resources'] if isinstance(server, Server) and server.uuid == resource_uuid_or_name ]
     # If length doesn't match the UUID, we can safely assume (I hope) we have a name
     else:
-        resource = [ server for server in  ctx_obj['all_resources'] if isinstance(server, Server) and server.name == resource_uuid_or_name ][0]
+        resource = [ server for server in  ctx_obj['resources'] if isinstance(server, Server) and server.name == resource_uuid_or_name ]
 
-    return resource
+    if len(resource) != 1:
+        LogHandler.critical(f'Unable to find one and exactly one matching server resource using the value "{ resource_uuid_or_name }"')
+
+    return resource[0]
 
 
 @click.pass_obj
@@ -388,7 +403,7 @@ def build_terraform_plan(ctx_obj):
     plan += jinja_handler.get_and_render_template('./templates/terraform/provider.tf.j2', {'required_providers' : ctx_obj['required_providers']})+ '\n\n'
         
     # Now prepare it all
-    for resource in ctx_obj["all_resources"]:
+    for resource in ctx_obj["resources"]:
 
         # Now prepare the resource
         jinja_vars = { **vars(resource), **ctx_obj }
@@ -417,7 +432,7 @@ def map_terraform_values_to_resources(ctx_obj, json_data):
         if resource_address[0] == 'data': continue
 
         resource_uuid = resource_address[1]
-        matching_resource = [r for r in ctx_obj['all_resources'] if r.uuid == resource_uuid]
+        matching_resource = [r for r in ctx_obj['resources'] if r.uuid == resource_uuid]
             
         # Get the matching resource, if returned, else continue to next resource
         if (len(matching_resource) > 0):
@@ -445,7 +460,7 @@ def build_ansible_inventory(ctx_obj):
     server_types = get_implemented_server_types()
     inventory = {inventory: {'hosts': {}} for inventory in server_types}
 
-    for resource in ctx_obj['all_resources']:
+    for resource in [ server for server in  ctx_obj['resources'] if isinstance(server, Server) ]:
         inventory[resource.server_type]['hosts'][resource.public_ip] = resource.prepare_object_for_ansible()
             
     # Ansible will lock this file at times, so we need to try to write the changes, but may not be able to
