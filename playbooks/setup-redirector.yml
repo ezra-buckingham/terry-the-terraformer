@@ -23,9 +23,6 @@
 
       - name: Generate SSL Certificates for the domains
         include_tasks: '{{ playbook_dir }}/core/generate-ssl-certificates.yml'
-        loop: "{{ domain_map }}"
-        loop_control:
-          loop_var: domain
 
       - name: Remove strict checking of SSL certificates
         ansible.builtin.replace:  
