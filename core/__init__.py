@@ -677,28 +677,6 @@ def get_implemented_redirector_types():
     return redirector_types
 
 
-def build_resource_domain_map(protocol, domain):
-    """Helper class to build out the proper Domain objects needed for the specified protocol
-
-    Args:
-        `protocol (str)`: Protocol for the DNS records to allow for 
-        `domain (Domain)`: Domain object in which to map records to
-    """
-
-    if protocol not in Redirector.get_implemented_redirectors():
-        LogHandler.critical(f'Invalid redirector type provided: "{protocol}". Please use one of the implemented redirectors: {Redirector.get_implemented_redirectors()}')
-
-    if protocol == 'dns':
-        existing_record = domain.domain_records.pop()
-        modified_records =  [
-            DomainRecord(domain.provider, 'ns1', 'A'),
-            DomainRecord(domain.provider, existing_record.subdomain, 'NS')
-        ]
-        domain.domain_records += modified_records
-
-    return domain
-
-
 def generate_ssh_key():
     """Generate an SSH key if we want to dynamically generate keys for our deployments.
     Takes nothing
