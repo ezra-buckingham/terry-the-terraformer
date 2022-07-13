@@ -38,6 +38,7 @@ digitalocean:
       - DIGITALOCEAN_ACCESS_TOKEN
   is_registrar: true
   server: 
+    resource_type: resource
     resource_name: digitalocean_droplet
     remote_user: root
     ip_reference: ipv4_address
@@ -55,44 +56,6 @@ digitalocean:
         redirector: 32
         categorize: 32
         bare: 64
-
-############## Azure ############
-azure:
-  provider:
-    source: "hashicorp/azurerm"
-    version: "=3.0.0"
-    required_args:
-      - ARM_CLIENT_SECRET
-  is_registrar: true
-  server:
-    resource_name: azurerm_virtual_machine
-    remote_user: null
-    ip_reference: null
-    terry_defaults:
-      server_size:
-        global: null
-        teamserver: null
-        lighthouse: null
-        redirector: null
-        categorize: null
-      disk_size: 
-        global: null
-        teamserver: null
-        lighthouse: null
-        redirector: null
-        categorize: null
-        bare: null
-
-############## Google ############
-google:
-  provider:
-    source: "hashicorp/google"
-    version: "4.28.0"
-    required_args:
-      - GOOGLE_APPLICATION_CREDENTIALS
-  is_registrar: true
-  server:
-    resource_name: 
 
 ############## ProxMox ############
 proxmox:

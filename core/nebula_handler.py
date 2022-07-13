@@ -40,7 +40,7 @@ class NebulaHandler:
             return
         
         # Create the command and run it
-        generate_command = f'{ str(self.nebula_ca_binary.path) } ca -name 5TAG3'
+        generate_command = f'{ str(self.nebula_ca_binary.path) } ca -name Terry'
 
         LogHandler.info('Generating Nebula CA Root certificate and key')
         try:

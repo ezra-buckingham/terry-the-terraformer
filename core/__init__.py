@@ -1,4 +1,5 @@
 import random
+import re
 import click
 import yaml
 
@@ -58,7 +59,6 @@ def prepare_nebula_handler(ctx_obj):
                     provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
 
                 lighthouse = Lighthouse(lighthouse_name, provider, None)
-                ctx_obj["server_resources"].insert(0, lighthouse)
                 ctx_obj["resources"].insert(0, lighthouse)
             else:
                 LogHandler.warn('Opting out of Nebula for this build')
@@ -527,7 +527,9 @@ def generate_random_name():
     random_word1 = __get_random_word()
     random_word2 = __get_random_word()
 
-    return f'{random_word1}-{random_word2}'
+    name = re.sub(r'[^a-zA-Z\-]', '', f'{random_word1}-{random_word2}')
+
+    return name
 
 
 @click.pass_obj

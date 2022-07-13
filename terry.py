@@ -276,11 +276,11 @@ def add(ctx_obj):
 
     LogHandler.info(f'Adding to the "{ ctx_obj["operation"] }" deployment')
 
-    # Prepare the core handlers
-    prepare_core_handlers()
-
     # Read in the existing build manifest
     parse_build_manifest()
+
+    # Prepare the core handlers
+    prepare_core_handlers()
 
     # Validate our credentials
     validate_credentials(check_containers=True)
@@ -298,11 +298,11 @@ def refresh(ctx_obj):
 
     LogHandler.info(f'Refreshing the "{ ctx_obj["operation"] }" plan')
 
-    # Prepare the core handlers
-    prepare_core_handlers()
-
     # Read in the existing build manifest
     parse_build_manifest()
+
+    # Prepare the core handlers
+    prepare_core_handlers()
 
     # Validate our credentials
     validate_credentials(check_containers=False)
@@ -327,11 +327,11 @@ def reconfigure(ctx_obj):
 
     LogHandler.info(f'Reconfiguring the "{ ctx_obj["operation"] }" plan')
 
-    # Prepare the core handlers
-    prepare_core_handlers()
-
     # Read in the existing build manifest
     parse_build_manifest()
+
+    # Prepare the core handlers
+    prepare_core_handlers()
 
     # Validate our credentials
     validate_credentials(check_containers=False)
@@ -379,6 +379,9 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
 
     if not name:
         name = generate_random_name()
+    else:
+        """"""
+        # TODO check for name already existing
 
     # Check if we have an SSH Key for that provider provisioned
     if provider not in ctx.obj['required_ssh_keys']:

@@ -1,5 +1,13 @@
-deployments/*
-*.log
+# Ignore all the configuration files
 config.yml
-.DS_Store
 configurations/container_mappings.yml
+configurations/terraform_mappings.yml
+
+# Ignore the Deployments directory
+deployments/*
+
+# Ignore log files
+*.log
+
+# Ignore stupid DS_Store
+.DS_Store
