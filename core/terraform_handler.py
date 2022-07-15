@@ -82,7 +82,7 @@ class TerraformHandler:
         # Non-reachable code
         return return_code, stdout, stderr, terraform_plan
 
-    def destroy_plan(self):
+    def destroy_plan(self, auto_approve=False):
         """Destroys the Terraform plan.
         Returns success (bool), stdout, stderr
         """
@@ -93,7 +93,7 @@ class TerraformHandler:
         if not self.working_dir.joinpath('terraform.tfstate').exists():
             return None, None, None
         
-        return_code, stdout, stderr = self.terraform.destroy(force=IsNotFlagged, auto_approve=True)
+        return_code, stdout, stderr = self.terraform.destroy(force=IsNotFlagged, auto_approve=auto_approve, capture_output=False)
 
         # Terraform exit codes:
         # 0 = Succeed with empty diff (no changes)

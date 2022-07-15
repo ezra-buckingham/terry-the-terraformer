@@ -12,40 +12,22 @@
 			"type": "divider"
 		},
     {% for resource in resources %}
+		{# Start parsing for if server resource #}
+		{% if resource.infrastructure_type == 'server' %}
 		{
 			"type": "header",
 			"text": {
 				"type": "plain_text",
-				{% if resource.server_type == 'categorize' %}
-				"text": "🖥️  Categorization - {{ resource.name }}",
-				{% elif resource.server_type == 'teamserver' %}
-				"text": "🕹️  Teamserver - {{ resource.name }}",
-				{% elif resource.server_type == 'redirector' %}
-				"text": "⏩  Redirector - {{ resource.name }}",
-				{% elif resource.server_type == 'bare' %}
-				"text": "🗒️  Bare Server - {{ resource.name }}",
-				{% elif resource.server_type == 'lighthouse' %}
-				"text": "💡  Lighthouse Server - {{ resource.name }}",
-				{% endif %}
+				"text": "🖥️  Server - {{ resource.server_type }}",
 				"emoji": true
 			}
 		},
 		{
 			"type": "section",
 			"fields": [
-				{# Start parsing for the domains section #}
-				{% if resource.domain_map %}
-				{% for domain in resource.domain_map %}
 				{
 					"type": "mrkdwn",
-					"text": ">*Domain:* {{ domain.domain }} \n>*Registrar:* `{{ domain.provider }}`\n>*Records*:{% for record in domain.domain_records %}\n> + *Subdomain (Record Type):* `{% if record.subdomain | length == 0 %}.{% else %}{{record.subdomain}}{% endif %} ({{record.record_type}})`{% endfor %}"
-				},
-				{% endfor %}
-				{% endif %}
-				{# End parsing for the domains section #}
-				{
-					"type": "mrkdwn",
-					"text": "*Provider:* `{{ resource.provider }}`\n*Nebula IPv4:* `{{ resource.nebula_ip }}` \n*IPv4:* `{{ resource.public_ip }}`{% if resource.redirect_to %}\n*Redirection:* {{ resource.redirect_to }}{% endif %}"
+					"text": "*Name*: `{{ resource.name }}` \n*Provider:* `{{ resource.provider }}`\n*Nebula IPv4:* `{{ resource.nebula_ip }}` \n*IPv4:* `{{ resource.public_ip }}` \n*Domain:* `{{ resource.domain }}`"
 				}
 			]
 		},
@@ -108,7 +90,34 @@
 		{% endfor %}
 		{% endif %}
 		{# End parsing for the c2 section #}
+		{# End parsing for if server resource #}
+		{# Start parsing for if server resource #}
+		{% elif resource.infrastructure_type == 'domain' %}
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				"text": "🌎  Domain - {{ resource.domain }}",
+				"emoji": true
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+					"type": "mrkdwn",
+					"text": "*Name*: `{{ resource.root_domain }}[.]{{ resource.top_level_domain }}` \n*Provider:* `{{ resource.provider }}`"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ">*Records*:{% for record in resource.domain_records %}\n> - *({{ record.record_type }}):* `{{ record.subdomain }}` to `{{ record.value }}`{% endfor %}"
+			}
+		},
+		{% else %}
 
+		{% endif %}
 		{
 			"type": "divider"
 		},

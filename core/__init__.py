@@ -27,6 +27,20 @@ from core.environment_variable_handler import EnvironmentVariableHandler
 #################################################################################################################
 
 @click.pass_obj
+def check_for_operation_directory(ctx_obj):
+    """Check that the operation directory exists
+
+    Args: 
+        `None`
+    Returns:
+        `None`
+    """
+
+    # Check if the folder exists
+    if not ctx_obj['op_directory'].exists():
+        LogHandler.critical(f'No deployment found with the name "{ ctx_obj["operation"] }"')
+
+@click.pass_obj
 def prepare_nebula_handler(ctx_obj):
     """Prepare the nebula handler object for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']
     This is split out as we may want not want to search for the Nebula Binary too early in a build as it might not be needed
@@ -286,6 +300,10 @@ def retreive_remote_configurations(ctx_obj):
     LogHandler.info('Checking config for remote configuration definitions')
 
     # Check to see if any remote configurations were defined in the config
+    if not ctx_obj["config_contents"]["ansible_configuration"]["remote"]:
+        LogHandler.warn('No remote configurations found in the config file.')
+        return []
+
     for remote_config in ctx_obj["config_contents"]["ansible_configuration"]["remote"]:
         if not remote_config["name"] or len(remote_config["name"]) == 0:
             LogHandler.error('Found blank entry for a remote configuration in the config file, skipping blank entry...')

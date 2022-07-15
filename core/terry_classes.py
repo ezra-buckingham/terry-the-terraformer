@@ -81,6 +81,10 @@ class AnsibleControlledObject:
         if isinstance(self, Lighthouse):
             self_dict['am_lighthouse'] = True
 
+        # Check for a uuid
+        if hasattr(self, 'uuid') and self.uuid is not None:
+            self_dict['uuid'] = self.uuid
+
         # Check for name
         if hasattr(self, 'name') and self.name is not None:
             self_dict['name'] = self.name

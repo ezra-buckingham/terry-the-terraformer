@@ -1,6 +1,6 @@
-resource "azurerm_ssh_public_key" "example" {
-  name                = "{{ ssh_key_name }}"
+resource "azurerm_ssh_public_key" "{{ provider }}-{{ build_uuid }}" {
+  name = "{{ ssh_key_name }}"
   resource_group_name = "example"
-  location            = "West Europe"
-  public_key          = file("~/.ssh/id_rsa.pub")
+  location = "West Europe"
+  public_key = file("~/.ssh/id_rsa.pub")
 }

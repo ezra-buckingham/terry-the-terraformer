@@ -50,15 +50,15 @@
         - name: Build the valid docker-compose file locally based on the docker_services fact (stripping out Terry-specific values)
           ansible.builtin.template:
             src: '{{ playbook_dir }}/../templates/docker/docker-compose.yml.j2'
-            dest: '{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_docker-compose.yml'
+            dest: '{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_docker-compose.yml'
 
         - name: Append the new the docker-compose.yml file to the jinja_unescape_paths list for later processing
           set_fact:
-            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_docker-compose.yml" ]'
+            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_docker-compose.yml" ]'
         
         - name: Append all existing pre_run_commands and post_run_commands to the jinja_unescape_paths list for later processing
           set_fact:
-            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml", "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml" ]'
+            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml", "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml" ]'
           loop: "{{ docker_services }}"
           loop_control:
             label: "{{ item.container_name }}"
@@ -66,7 +66,7 @@
         - name: Create the pre_run_commands task file on localhost
           ansible.builtin.copy:
             content: "{{ item.pre_run_commands | to_nice_yaml }}"
-            dest: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
+            dest: "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
           loop: "{{ docker_services }}"
           loop_control:
             label: "{{ item.container_name }}"
@@ -74,7 +74,7 @@
         - name: Create the post_run_commands task file on localhost
           ansible.builtin.copy:
             content: "{{ item.post_run_commands | to_nice_yaml }}"
-            dest: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml"
+            dest: "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml"
           loop: "{{ docker_services }}"
           loop_control:
             label: "{{ item.container_name }}"
@@ -85,7 +85,7 @@
 
     - name: Deploy the valid and complete docker-compose file
       ansible.builtin.template:
-        src: '{{ op_directory }}/ansible/extra_vars/{{ansible_ssh_host}}_docker-compose.yml'
+        src: '{{ op_directory }}/ansible/extra_tasks/{{ansible_ssh_host}}_docker-compose.yml'
         dest: '/opt/container/docker-compose.yml'
 
     - name: Authenticate to the container registry
@@ -94,7 +94,7 @@
     
     - name: Run the pre_run_commands for each container
       ansible.builtin.include_tasks:
-        file: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
+        file: "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
       loop: "{{ docker_services }}"
       loop_control:
         label: "{{ item.container_name }}"
@@ -105,7 +105,7 @@
 
     - name: Run the post_run_commands for each container
       ansible.builtin.include_tasks:
-        file: "{{ op_directory }}/ansible/extra_vars/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml"
+        file: "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml"
       loop: "{{ docker_services }}"
       loop_control:
         label: "{{ item.container_name }}"

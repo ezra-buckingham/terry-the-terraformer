@@ -139,6 +139,9 @@ def destroy(ctx_obj, recursive):
 
     LogHandler.info(f'Destroying the "{ ctx_obj["operation"] }" plan')
 
+    # Check the operation exists
+    check_for_operation_directory()
+
     # Prepare all required handlers
     prepare_core_handlers()
 
@@ -148,7 +151,7 @@ def destroy(ctx_obj, recursive):
     # Validate our credentials
     validate_credentials(check_containers=False)
 
-    success, stdout, stderr = ctx_obj['terraform_handler'].destroy_plan()
+    success, stdout, stderr = ctx_obj['terraform_handler'].destroy_plan(auto_approve=ctx_obj['auto_approve'])
 
     if success or success is None:
         if success:
@@ -166,7 +169,7 @@ def destroy(ctx_obj, recursive):
         else:
             LogHandler.warn('Leaving all build files intact. If you wish to destroy them, use the "-r" / "--recursive" flag')
     else:
-        LogHandler.critical(f'Error when destroying "{ ctx_obj["operation"] }"\r\nSTDOUT: {stdout}\r\nSTDERR: {stderr}', True)
+        LogHandler.critical(f'Error when destroying "{ ctx_obj["operation"] }". Please try again.')
     
     LogHandler.info('Terry destroy complete!')
 
@@ -195,7 +198,7 @@ def create(ctx_obj):
         LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable)')
         Path(ctx_obj['op_directory']).mkdir()
         # Does not account for situations where op_directory exists but these children do not
-        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'nebula/']:
+        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'ansible/extra_tasks', 'nebula/']:
             Path(ctx_obj['op_directory']).joinpath(path).mkdir(parents=True)
 
         # Generate the SSH Keys and write them to disk
@@ -253,7 +256,7 @@ def build_infrastructure(ctx_obj, resources):
         LogHandler.info('Setting up Nebula configurations and certificates')
         ctx_obj['nebula_handler'].generate_ca_certs()
         for resource in [ server for server in  ctx_obj['resources'] if isinstance(server, Server) ]:
-            assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.name)
+            assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.uuid)
             resource.nebula_ip = assigned_nebula_ip
         extract_nebula_config()
     else:
@@ -275,6 +278,9 @@ def add(ctx_obj):
     """Add to an existing deployment"""
 
     LogHandler.info(f'Adding to the "{ ctx_obj["operation"] }" deployment')
+
+    # Check the operation exists
+    check_for_operation_directory()
 
     # Read in the existing build manifest
     parse_build_manifest()
@@ -298,6 +304,9 @@ def refresh(ctx_obj):
 
     LogHandler.info(f'Refreshing the "{ ctx_obj["operation"] }" plan')
 
+    # Check the operation exists
+    check_for_operation_directory()
+
     # Read in the existing build manifest
     parse_build_manifest()
 
@@ -316,9 +325,10 @@ def refresh(ctx_obj):
     # Write the refreshed data back to the manifest
     create_build_manifest(full_replace=True)
 
+    ctx_obj['slack_handler'].send_success(ctx_obj)
+
     LogHandler.info('Terry refresh complete! Refreshing, huh?')
     
-
 
 @cli.command(name='reconfigure')
 @click.pass_obj
@@ -327,6 +337,9 @@ def reconfigure(ctx_obj):
 
     LogHandler.info(f'Reconfiguring the "{ ctx_obj["operation"] }" plan')
 
+    # Check the operation exists
+    check_for_operation_directory()
+
     # Read in the existing build manifest
     parse_build_manifest()
 
@@ -334,7 +347,7 @@ def reconfigure(ctx_obj):
     prepare_core_handlers()
 
     # Validate our credentials
-    validate_credentials(check_containers=False)
+    validate_credentials(check_containers=True)
 
     # Retrieve any remote configuration files
     retreive_remote_configurations()

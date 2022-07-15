@@ -39,7 +39,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "documentation", "refresh"
+        "-o", "testing", "refresh"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },
@@ -51,7 +51,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "documentation", "-v", "reconfigure"
+        "-o", "testing", "-v", "reconfigure"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },
