@@ -1,4 +1,9 @@
 
+- name: "Delete the sliver config for the custom sliver client"
+  ansible.builtin.file:
+    path: "/opt/container/sliver/mount/sally-sliver-siren.conf"
+    state: absent
+
 - name: Generate the sliver config for the custom sliver client
   shell: |
     docker exec sliver /opt/sliver/sliver-server operator --lhost 127.0.0.1 --lport 3333 --name sally-sliver-siren --save /opt/sliver/mount/sally-sliver-siren.conf
@@ -6,14 +11,14 @@
 - name: Clone the sally the sliver siren repo
   ansible.builtin.git:
     repo: https://github.com/ezra-buckingham/sally-the-sliver-siren.git
-    dest: /opt/
+    dest: /opt/sally-the-sliver-siren
 
 - name: Install pip
   apt:
     name: python3-pip
     state: present
 
-- name: Install all dependencies
+- name: Install all dependencies (this will take a while)
   shell: |
     python3 -m pip install -r /opt/sally-the-sliver-siren/requirements.txt
 

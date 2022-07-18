@@ -1,0 +1,52 @@
+
+- name: Install all Elastic dependencies
+  apt:
+    pkg:
+      - apt-transport-https
+      - curl
+    state: present
+
+- name: Remove the Elastic GPG apt key if present (need to or next step fails)
+  ansible.builtin.file:
+    path: /usr/share/keyrings/elasticsearch-keyring.gpg
+    state: absent
+
+- name: Add Elastic GPG apt Key
+  shell: |
+    curl -fsSL https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+
+- name: Add the Elastic official repository for Debian to APT repos
+  shell: |
+    echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | tee /etc/apt/sources.list.d/elastic-8.x.list
+
+- name: Install Elastic and Kibana
+  apt:
+    pkg: 
+      - elasticsearch
+      - kibana
+    update_cache: yes
+
+- name: Modify Kibana to listen on all interfaces (port)
+  ansible.buitin.replace:
+    path: /etc/kibana/kibana.yml
+    regex: ^#server.port
+    replace: 'server.port: 5601'
+
+- name: Modify Kibana to listen on all interfaces (address)
+  ansible.buitin.replace:
+    path: /etc/kibana/kibana.yml
+    regex: ^#server.host
+    replace: 'server.host: "0.0.0.0"'
+
+- name: Load the service files
+  shell: |
+    systemctl daemon-reload
+
+- name: Enable and start elasticsearch and kibana
+  shell: |
+    systemctl enable elasticsearch.service --now
+    systemctl enable kibana.service --now
+
+- name: Generate the Elastic enrollment token
+  shell: |
+    /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana

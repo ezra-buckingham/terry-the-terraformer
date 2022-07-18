@@ -142,6 +142,7 @@ def prepare_and_run_ansible(ctx_obj):
     ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
 
     # Run all the server-type specific playbooks
+    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-lighthouse.yml')
     ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
     ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
     ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
@@ -205,9 +206,13 @@ def parse_build_manifest(ctx_obj):
                 resource = Server.from_dict(resource)
             elif resource_type == 'domain':
                 resource = Domain.from_dict(resource)
+                domain_zone = f'{ resource.domain }'
+                ctx_obj['required_domains'].add(domain_zone)
             elif resource_type == 'ssh_key':
                 resource = SSHKey.from_dict(resource)
+                ctx_obj['required_ssh_keys'].add(resource.provider)
 
+            ctx_obj['required_providers'].add(resource.provider)
             ctx_obj['resources'].append(resource)
         
         extract_nebula_config()
@@ -639,7 +644,7 @@ def check_for_required_value(ctx_obj, value_name, hide_input=False):
     if not required_value.get():
         returned_value = LogHandler.get_input(f'Enter the {value_name}', hide_input=hide_input)
         required_value.set(returned_value)
-        return returned_value
+        return required_value
 
 
 def remove_directory_recursively(path):

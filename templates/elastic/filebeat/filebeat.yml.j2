@@ -1,0 +1,25 @@
+# ============================== Filebeat inputs ===============================
+
+filebeat.inputs:
+
+- type: filestream
+  id: my-filestream-id
+  enabled: true
+  paths:
+    - /var/log/apache2/access.log
+    - /opt/container/cobaltstrike/mount/logs/*
+
+# ============================== Filebeat modules ==============================
+
+filebeat.config.modules:
+  # Glob pattern for configuration loading
+  path: ${path.config}/modules.d/*.yml
+
+  # Set to true to enable config reloading
+  reload.enabled: false
+
+  # Period on which files under path should be checked for changes
+  #reload.period: 10s
+
+output.logstash:
+  hosts: ["{{ lighthouse_nebula_ip }}:5044"]

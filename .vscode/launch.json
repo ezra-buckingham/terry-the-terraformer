@@ -56,6 +56,19 @@
       //"preLaunchTask": "Remove terry_testing files"
     },
     {
+      "name": "Testing Terry: Add",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "./terry.py",
+      "console": "integratedTerminal",
+      "args": [
+        "-o", "hive", "-v", "add", 
+        "server", "-sN", "logstash2", "-p","aws"
+      ],
+      //"preLaunchTask": "Remove terry_testing files"
+    },
+    {
       "name": "Testing Terry Destroy",
       "type": "python",
       "request": "launch",

@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+from asyncio.events import BaseDefaultEventLoopPolicy
+from itertools import chain
 import json
 import logging
 import os
@@ -269,10 +271,10 @@ def build_infrastructure(ctx_obj, resources):
     ctx_obj['end_time'] = get_formatted_time()
     ctx_obj['slack_handler'].send_success(ctx_obj)
 
-    LogHandler.info('Terry create complete! Enjoy the tools you tool!')
+    LogHandler.info('Terry building complete! Enjoy the tools you tool!')
 
 
-@cli.group(name='add')
+@cli.group(name='add', chain=True)
 @click.pass_obj
 def add(ctx_obj):
     """Add to an existing deployment"""
@@ -288,14 +290,15 @@ def add(ctx_obj):
     # Prepare the core handlers
     prepare_core_handlers()
 
-    # Validate our credentials
-    validate_credentials(check_containers=True)
-
-    # Prepare the Inventory file and run Ansible
-    prepare_and_run_ansible()
-
-    LogHandler.info('Terry additions complete! It seems to add up!')
+    # Load the public key so we can build the ssh key resources later
+    public_key, private_key = get_operation_ssh_key_pair()
+    ctx_obj['ssh_pub_key'] = public_key
     
+
+@add.result_callback()
+def add_infrstructure(resources):
+    build_infrastructure(resources)
+
 
 @cli.command(name='refresh')
 @click.pass_obj

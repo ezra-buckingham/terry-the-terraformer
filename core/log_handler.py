@@ -30,7 +30,7 @@ class LogHandler:
         """
         if hide_input:
             message += '(Input will be hidden)'
-        result = click.prompt(f'[?] {message}', hide_input=hide_input)
+        result = click.prompt(f'[?] {message}', hide_input=hide_input, default='')
         return result
 
 
@@ -48,7 +48,7 @@ class LogHandler:
 
         logger.debug(message)
         if is_verbose_enabled():
-            click.secho(f'[*] {message}', fg='blue')
+            click.secho(f'[*] {message}', fg='cyan')
 
 
     @classmethod

@@ -1,0 +1,21 @@
+
+- name: Create the Filebeat directory
+  ansible.builtin.file:
+    path: /opt/filebeat
+    state: directory
+
+- name: Download the Filebeat package
+  ansible.builtin.get_url:
+    url: https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-8.3.2-amd64.deb
+    dest: /opt/filebeat/filebeat.deb
+
+- name: Install the Filebeat package
+  ansible.builtin.apt:
+    deb: /opt/filebeat/filebeat.deb
+
+- name: Deploy the Filebeat service configuration
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../templates/elastic/filebeat/filebeat.yml.j2'
+    dest: /etc/filebeat/filebeat.yml
+
+ 

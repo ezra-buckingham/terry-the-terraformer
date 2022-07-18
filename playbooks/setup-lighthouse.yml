@@ -1,0 +1,28 @@
+---
+- name: Setup the lighthouse server
+  gather_facts: true
+  hosts: lighthouse
+  become: true
+  tasks:
+
+  - name: Install Docker on the host
+    include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
+
+  - name: Create the Logstash directory
+    ansible.builtin.file:
+      path: /opt/logstash
+      state: directory
+
+  - name: Deploy the Logstash service configuration
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/elastic/logstash/logstash.yml.j2'
+      dest: /etc/logstash/logstash.yml
+  
+  - name: Deploy the Logstash runtime configuration
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/elastic/logstash/logstash.conf.j2'
+      dest: /opt/logstash/logstash.conf
+    
+  - name: Enforce firewall rules
+    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+      
