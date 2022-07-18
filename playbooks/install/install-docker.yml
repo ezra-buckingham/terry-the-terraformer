@@ -22,13 +22,6 @@
   shell: |
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-- name: Index the new repository into the cache
-  apt:
-    name: "*"
-    state: latest
-    update_cache: yes
-    force_apt_get: yes
-
 - name: Install Docker and all Docker Plugins
   apt: 
     pkg:
@@ -37,6 +30,7 @@
       - containerd.io 
       - docker-compose-plugin
     state: latest
+    update_cache: yes
 
 - name: Check if UFW configured to govern docker routing
   shell: grep "BEGIN UFW AND DOCKER" /etc/ufw/after.rules
