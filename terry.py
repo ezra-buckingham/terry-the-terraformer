@@ -51,6 +51,15 @@ from core import *
 @click.option('-cRP', '--container_registry_password', help='''
     Password used to authenticate to the container registry (required if deploying containers)
     ''')
+@click.option('-eIP', '--elastic_public_ip', help='''
+    Elasticsearch public ip address (for centralized logging)
+    ''')
+@click.option('-eU', '--elastic_username', help='''
+    Username used to authenticate to the Elasticsearch server / cluster
+    ''')
+@click.option('-eP', '--elastic_password', help='''
+    Password used to authenticate to the Elasticsearch server / cluster
+    ''')
 @click.option('-awsAK', '--aws_access_key_id', help='''
     AWS Access Key ID for AWS API
     ''')
