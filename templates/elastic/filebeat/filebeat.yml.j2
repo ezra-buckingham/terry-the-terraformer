@@ -3,11 +3,13 @@
 filebeat.inputs:
 
 - type: filestream
-  id: my-filestream-id
+  id: filebeat-stream
   enabled: true
   paths:
     - /var/log/apache2/access.log
-    - /opt/container/cobaltstrike/mount/logs/*
+    - /opt/container/*/.logging/*.*
+    - /opt/container/*/.logging/*/*.*
+    - /opt/container/*/.logging/*/*/*.*
 
 # ============================== Filebeat modules ==============================
 

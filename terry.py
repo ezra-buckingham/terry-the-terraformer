@@ -51,14 +51,17 @@ from core import *
 @click.option('-cRP', '--container_registry_password', help='''
     Password used to authenticate to the container registry (required if deploying containers)
     ''')
-@click.option('-eIP', '--elastic_public_ip', help='''
-    Elasticsearch public ip address (for centralized logging)
+@click.option('-eS', '--elastic_server', help='''
+    Elasticsearch public ip address or FQDN (for centralized logging)
     ''')
 @click.option('-eU', '--elastic_username', help='''
     Username used to authenticate to the Elasticsearch server / cluster
     ''')
 @click.option('-eP', '--elastic_password', help='''
     Password used to authenticate to the Elasticsearch server / cluster
+    ''')
+@click.option('-eK', '--elastic_api_key', help='''
+    API Key used to authenticate to the Elasticsearch server / cluster
     ''')
 @click.option('-awsAK', '--aws_access_key_id', help='''
     AWS Access Key ID for AWS API
@@ -96,6 +99,7 @@ from core import *
 @click.pass_context
 def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, no_nebula,
     container_registry, container_registry_username, container_registry_password, 
+    elastic_server, elastic_username, elastic_password, elastic_api_key,
     aws_access_key_id, aws_secret_access_key, aws_default_region, 
     digital_ocean_token, 
     namecheap_user_name, namecheap_api_user, namecheap_api_key,
