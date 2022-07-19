@@ -5,7 +5,7 @@
 
 # Terry the Terraformer
 
-Python CLI tool to to build red team infrastructure using Terraform, Ansible, and Docker. Once deployed, all resources can be integrated into a [Nebula network](https://github.com/slackhq/nebula) for secure communications across nodes.
+Python CLI tool to to build red team infrastructure using Terraform, Ansible, and Docker. Once deployed, all resources can be integrated into a [Nebula network](https://github.com/slackhq/nebula) for secure communications across nodes as well as with centralized logging that all goes through Logstash and into an Elastic Stack.
 
 ## Documentation
 
