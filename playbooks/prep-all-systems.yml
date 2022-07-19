@@ -68,6 +68,15 @@
 
   - name: Install Filebeats
     include_tasks: '{{ playbook_dir }}/install/install-filebeat.yml'
+
+  - name: Deploy the Filebeat service configuration
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/elastic/filebeat/filebeat.yml.j2'
+      dest: /etc/filebeat/filebeat.yml
+
+  - name: Start the Filebeat service
+    shell: |
+      systemctl enable filebeat --now
     
   - name: Enforce firewall rules
     include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"

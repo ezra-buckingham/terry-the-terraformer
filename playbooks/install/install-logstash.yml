@@ -21,18 +21,3 @@
     state: present
     update_cache: yes
 
-- name: Create the Logstash directory
-  ansible.builtin.file:
-    path: /opt/logstash
-    state: directory
-
-- name: Deploy the Logstash service configuration
-  ansible.builtin.template:
-    src: '{{ playbook_dir }}/../templates/elastic/logstash/logstash.yml.j2'
-    dest: /etc/logstash/logstash.yml
-  
-- name: Deploy the Logstash runtime configuration
-  ansible.builtin.template:
-    src: '{{ playbook_dir }}/../templates/elastic/logstash/logstash.conf.j2'
-    dest: /opt/logstash/logstash.conf
-

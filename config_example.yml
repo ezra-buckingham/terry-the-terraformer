@@ -35,9 +35,8 @@ slack:
   webhook_url:
 
 elastic:
-  elastic_public_ip:
-  elastic_username:
-  elastic_password: 
+  elastic_server:
+  elastic_api_key: # API Key auth
 
 # ===================== Cloud Configurations =====================
 aws:

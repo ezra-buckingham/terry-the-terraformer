@@ -1,17 +1,20 @@
 input {
   beats {
-    host => "0.0.0.0"
+    host => "{{ nebula_ip }}"
     port => 5044
   }
 }
 filter {
-  
+  # if [event.module] == "apache" {}
+  grok {
+    match => { "message" => "%{COMBINEDAPACHELOG}" }
+  }
 }
 output {
   elasticsearch {
-    hosts => ["https://{{ elastic_public_ip }}:9200"]
-    user => "{{ elastic_username }}"
-    password => "{{ elastic_password }}"
+    hosts => [ "https://{{ lookup('env', 'ELASTIC_SERVER') }}:9200" ]
+    index => "logs-{{ operation }}"
+    api_key => "{{ lookup('env', 'ELASTIC_API_KEY') }}"
     ssl => true
     ssl_certificate_verification => false
   }

@@ -1,6 +1,6 @@
 
 - name: Allow all Nebula traffic in the Lighthouse firewall
-  when: am_lighthouse
+  when: am_lighthouse is defined and am_lighthouse
   shell: |
     ufw allow from any proto udp to any port 4242
 

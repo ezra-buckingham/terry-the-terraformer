@@ -42,6 +42,9 @@ from core import *
 @click.option('-N', '--no_nebula', is_flag=True, default=False, help='''
     Skip setting up Nebula as a mesh vpn overlay on deployed resources
     ''')   
+@click.option('-Ne', '--no_elastic', is_flag=True, default=False, help='''
+    Skip setting up Logstash / Filebeats for deployed resources
+    ''')  
 @click.option('-cR', '--container_registry', help='''
     Container registry to use for deploying containers (The URL for the registry)
     ''')
@@ -53,12 +56,6 @@ from core import *
     ''')
 @click.option('-eS', '--elastic_server', help='''
     Elasticsearch public ip address or FQDN (for centralized logging)
-    ''')
-@click.option('-eU', '--elastic_username', help='''
-    Username used to authenticate to the Elasticsearch server / cluster
-    ''')
-@click.option('-eP', '--elastic_password', help='''
-    Password used to authenticate to the Elasticsearch server / cluster
     ''')
 @click.option('-eK', '--elastic_api_key', help='''
     API Key used to authenticate to the Elasticsearch server / cluster
@@ -97,9 +94,9 @@ from core import *
     Path to malleable C2 profile to use when starting CobaltStrike
     ''')
 @click.pass_context
-def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, no_nebula,
+def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, no_nebula, no_elastic,
     container_registry, container_registry_username, container_registry_password, 
-    elastic_server, elastic_username, elastic_password, elastic_api_key,
+    elastic_server, elastic_api_key,
     aws_access_key_id, aws_secret_access_key, aws_default_region, 
     digital_ocean_token, 
     namecheap_user_name, namecheap_api_user, namecheap_api_key,

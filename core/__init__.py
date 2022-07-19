@@ -196,6 +196,7 @@ def parse_build_manifest(ctx_obj):
     # Read the manifest and pass in the top level items to click context
     build_manifest = read_build_manifest()
     ctx_obj['build_uuid'] = build_manifest['build_uuid']
+    ctx_obj['operation'] = build_manifest['operation']
 
     # Check if there are resources listed in the build manifest and append to all resources
     if build_manifest['resources'] and len(build_manifest['resources']) > 0:
@@ -288,6 +289,10 @@ def validate_credentials(ctx_obj, check_containers=True):
     for provider in required_providers:
         current_provider = Provider(provider)
         ctx_obj['required_providers'].append(current_provider)
+
+    if not ctx_obj['no_elastic']:
+        check_for_required_value('elastic_server')
+        check_for_required_value('elastic_api_key')
      
     LogHandler.info('All required credentials found')
     
@@ -490,6 +495,7 @@ def build_ansible_inventory(ctx_obj):
     try:
         # Create the Global Vars to pass to ansible
         global_vars = ctx_obj["config_contents"]["ansible_configuration"]["global"]
+        global_vars["operation"] = str(ctx_obj["operation"])
         global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
         global_vars["nebula"] = not ctx_obj['no_nebula']
         # If installing Nebula, give the additional vars needed for configuring it on the hosts

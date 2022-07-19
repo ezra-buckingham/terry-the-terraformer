@@ -17,7 +17,7 @@ aws:
       server_size:
         global: 't2.micro'
         teamserver: 't2.medium'
-        lighthouse: 't2.micro'
+        lighthouse: 't2.medium'
         redirector: 't2.micro'
         categorize: 't2.micro'
       disk_size:

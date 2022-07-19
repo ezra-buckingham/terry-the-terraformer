@@ -2,26 +2,36 @@
 
 filebeat.inputs:
 
-- type: filestream
-  id: filebeat-stream
+- type: log
+  id: cobaltstrike-logs
   enabled: true
   paths:
-    - /var/log/apache2/access.log
-    - /opt/container/*/.logging/*.*
-    - /opt/container/*/.logging/*/*.*
-    - /opt/container/*/.logging/*/*/*.*
+    - /opt/container/cobaltstrike/.logging/*.*
+    - /opt/container/cobaltstrike/.logging/*/*.*
+    - /opt/container/cobaltstrike/.logging/*/*/*.*
+
+- type: log
+  id: sliver-logs
+  enabled: true
+  paths:
+    - /opt/container/sliver/.logging/*.*
+    - /opt/container/sliver/.logging/*/*.*
+    - /opt/container/sliver/.logging/*/*/*.*
 
 # ============================== Filebeat modules ==============================
 
 filebeat.config.modules:
-  # Glob pattern for configuration loading
+
   path: ${path.config}/modules.d/*.yml
+  reload.enabled: true
+  reload.period: 30s
 
-  # Set to true to enable config reloading
-  reload.enabled: false
+filebeat.modules:
 
-  # Period on which files under path should be checked for changes
-  #reload.period: 10s
+- module: apache
+  access:
+    enabled: true
+    var.paths: ["/var/log/apache2/access.log*"]
 
 output.logstash:
   hosts: ["{{ lighthouse_nebula_ip }}:5044"]

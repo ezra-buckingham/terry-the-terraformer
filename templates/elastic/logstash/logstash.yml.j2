@@ -18,7 +18,7 @@ path.config: /opt/logstash/logstash.conf
 
 # ------------ API Settings -------------
 api.enabled: true
-api.http.host: 0.0.0.0
+api.http.host: {{ nebula_ip }}
 api.http.port: 9600-9700
 api.environment: "production"
 
@@ -42,8 +42,8 @@ api.environment: "production"
 # resolves to the value stored in the keystore's `HTTP_PASS` variable if present
 # or the same variable from the environment)
 #
-api.auth.basic.username: "terry"
-api.auth.basic.password: "{{ logstash_password }}"
+# api.auth.basic.username: "terry"
+# api.auth.basic.password: "{# logstash_password #}"
 #
 # When setting `api.auth.basic.password`, the password should meet
 # the default password policy requirements.
