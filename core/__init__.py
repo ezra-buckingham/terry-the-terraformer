@@ -1,5 +1,6 @@
 import random
 import re
+from unittest import result
 import click
 import yaml
 
@@ -41,7 +42,7 @@ def check_for_operation_directory(ctx_obj):
         LogHandler.critical(f'No deployment found with the name "{ ctx_obj["operation"] }"')
 
 @click.pass_obj
-def prepare_nebula_handler(ctx_obj):
+def prepare_lighthouse(ctx_obj):
     """Prepare the nebula handler object for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']
     This is split out as we may want not want to search for the Nebula Binary too early in a build as it might not be needed
 
@@ -53,48 +54,66 @@ def prepare_nebula_handler(ctx_obj):
 
     # Get all the lighthouses from the resources
     lighthouses = [ x for x in ctx_obj["resources"] if isinstance(x, Lighthouse) ]
+    servers = [ resource for resource in ctx_obj['resources'] if isinstance(resource, Server) ]
     
+    # Ensure we only have one lighthouse
+    if len(lighthouses) > 1:
+        LogHandler.critical('Multiple Lighthouses found in build, Terry can only handle building one per deployment')
+    
+    def add_lighthouse():
+        
+        # Ask the user if they wish to continue
+        response = LogHandler.confirmation('Would you like me to add a Lighthouse to the current build?')
+        if not response:
+            return False
+        
+        lighthouse_name = generate_random_name()
+
+        # Now get the provider from the user
+        provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
+        while provider not in TerraformObject.get_terraform_mappings(simple_list=True):
+            LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {TerraformObject.get_terraform_mappings(simple_list=True)}', is_fatal=False)
+            provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
+
+        lighthouse = Lighthouse(lighthouse_name, provider, None)
+        ctx_obj["resources"].insert(0, lighthouse)
+    
+        return True
+        
     # Check with user if we want to build nebula when there are many servers in the build
-    if not ctx_obj['no_nebula'] and len([ resource for resource in ctx_obj['resources'] if isinstance(resource, Server) ]) > 1:
-        # Check to make sure we only have one lighthouse in the build
-        if len(lighthouses) > 1:
-            LogHandler.critical('Multiple Lighthouses found in build, Terry can only handle building one per deployment')
-    
-        if len(lighthouses) == 0:
+    if len(lighthouses) == 0:
+        if not ctx_obj['no_nebula']:
             LogHandler.warn('Nebula configured for this build, but no Lighthouses found. Either use the "-N" / "--no_nebula" flag or I can build one for you now.')
-            response = LogHandler.confirmation('Would you like me to add a Lighthouse to the current build?')
-            if response:
-                lighthouse_name = generate_random_name()
-
-                # Now get the provider from the user
-                provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
-                while provider not in TerraformObject.get_terraform_mappings(simple_list=True):
-                    LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {TerraformObject.get_terraform_mappings(simple_list=True)}', is_fatal=False)
-                    provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
-
-                lighthouse = Lighthouse(lighthouse_name, provider, None)
-                ctx_obj["resources"].insert(0, lighthouse)
-            else:
+            result = add_lighthouse()
+            if not result:
                 LogHandler.warn('Opting out of Nebula for this build')
                 ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
-
-        # Need to check we have enough IPs in the IP space
-        # TODO
-    else:
-        LogHandler.warn('Nebula configured for this build, but only one server is in the manifest. Not going to use Nebula for this build as that would be a waste of resources.')
-        ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
-    
-    # Check if we said to have no nebula, but manually built a lighthouse
-    if ctx_obj['no_nebula'] and len(lighthouses) > 0:
-        LogHandler.warn('Lighthouse found in build along with "-N / --no_nebula"')
-        response = LogHandler.confirmation('Did you want to use Nebula for this build?')
-        if response:
-            ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
-
-    # Create the Nebula Handler (if applicable)
+            else:
+                prepare_lighthouse()
+        
+        if not ctx_obj['no_elastic']:
+            LogHandler.warn('Elastic configured for this build, but no Lighthouses found. Either use the "-Ne" / "--no_elastic" flag or I can build one for you now.')
+            result = add_lighthouse()
+            if not result:
+                LogHandler.warn('Opting out of Elastic for this build')
+                ctx_obj['no_elastic'] = not ctx_obj['no_elastic']
+            else:
+                prepare_lighthouse()
+                
     if not ctx_obj['no_nebula']:
+        LogHandler.debug('Nebula has been configured for this build')
         nebula_path = ctx_obj['config_contents']['global']['nebula_path']
-        ctx_obj['nebula_handler'] = NebulaHandler(nebula_path, ctx_obj['config_contents']['global']['nebula_subnet'], Path(ctx_obj['op_directory']).joinpath('nebula'))   
+        ctx_obj['nebula_handler'] = NebulaHandler(nebula_path, ctx_obj['config_contents']['global']['nebula_subnet'], Path(ctx_obj['op_directory']).joinpath('nebula'))
+    else:
+        LogHandler.warn('This build has opted out of Nebula')
+        
+    if not ctx_obj['no_elastic']:
+        LogHandler.debug('Elastic has been configured for this build')
+        check_for_required_value('elastic_server')
+        check_for_required_value('elastic_api_key')
+    else:
+        LogHandler.warn('This build has opted out of Elastic')
+        
 
 
 @click.pass_context

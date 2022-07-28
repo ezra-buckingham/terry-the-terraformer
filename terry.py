@@ -245,7 +245,7 @@ def build_infrastructure(ctx_obj, resources):
     # Make sure we have credentials for each of the providers
     validate_credentials(check_containers=True)
 
-    prepare_nebula_handler()
+    prepare_lighthouse()
 
     LogHandler.debug('Build looks good! Terry, take it away!')
 

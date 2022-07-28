@@ -9,8 +9,8 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "documentation", "-v", "-a", "-f", "create", 
-        "server", "-t", "bare", "-p", "aws",
+        "-o", "docs", "-v", "-a", "-f", "-N", "create", 
+        "server", "-t", "bare", "-p", "aws", "server", "-t", "lighthouse", "-p", "aws"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },
