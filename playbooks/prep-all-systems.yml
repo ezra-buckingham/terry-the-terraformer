@@ -76,6 +76,7 @@
 
   - name: Start the Filebeat service
     shell: |
+      systemctl stop filebeat
       systemctl enable filebeat --now
     
   - name: Enforce firewall rules

@@ -1,15 +1,10 @@
 # ------------  Node identity ------------
-#
-# Use a descriptive name for the node:
-#
 node.name: {{ operation }}
 
 # ------------ Data path ------------------
 path.data: /var/lib/logstash
 
 # ------------ Pipeline Settings --------------
-
-# The ID of the pipeline.
 pipeline.id: {{ operation }}
 pipeline.unsafe_shutdown: true
 

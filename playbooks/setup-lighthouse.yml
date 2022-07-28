@@ -19,7 +19,6 @@
       dest: /etc/logstash/logstash.yml
       owner: logstash
       group: root
-      #mode: 
     
   - name: Deploy the Logstash runtime configuration
     ansible.builtin.template:
@@ -27,10 +26,10 @@
       dest: /opt/logstash/logstash.conf
       owner: logstash
       group: root
-      #mode: 
 
   - name: Start the Logstash service
     shell: |
+      systemctl stop logstash
       systemctl enable logstash --now
 
   - name: Enforce firewall rules
