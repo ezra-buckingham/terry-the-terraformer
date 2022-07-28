@@ -17,7 +17,7 @@ Getting started is relatively easy. Follow the [Getting Started](https://github.
 
 ## Contributors / Acknowledgement
 
-I want to thank all the people who have helped with the Architecture of this solution and the devlopment of each piece. Initially, this project came to life from a co-worker, [WJDigby](https://github.com/WJDigby), and he had a much cooler name for it.
+I want to thank all the people who have helped with the Architecture of this solution and the devlopment of each piece. Initially, this project came to life from a co-worker, [WJDigby](https://github.com/WJDigby) (he had a much cooler name for the project than Terry too).
 
 And not to mention all the people in BloodHound slack that I pestered for getting feedback on this solution. Thank you!
 

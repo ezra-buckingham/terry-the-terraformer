@@ -23,7 +23,7 @@ aws:
       disk_size:
         global: 32
         teamserver: 64
-        lighthouse: 32
+        lighthouse: 64
         redirector: 32
         categorize: 32
         bare: 64
@@ -50,7 +50,7 @@ digitalocean:
       disk_size: 
         global: 32
         teamserver: 64 
-        lighthouse: 32
+        lighthouse: 64
         redirector: 32
         categorize: 32
         bare: 64

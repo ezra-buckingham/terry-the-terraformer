@@ -129,6 +129,7 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     ctx.obj['resources'] = []  # List of all resources 
 
     # Sets to track all the items we need one and only one of for each build / provider
+    ctx.obj['existing_server_names'] = set()
     ctx.obj['required_providers'] = set()
     ctx.obj['required_ssh_keys'] = set()
     ctx.obj['required_domains'] = set()
@@ -402,13 +403,16 @@ def reconfigure(ctx_obj):
 @click.pass_context
 def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, container):
     """Create a server resource"""
-
+    
+    # Check for that name already existing
+    if name in ctx.obj['existing_server_names']:
+        LogHandler.critical(f'A server with name "{ name }" already exists, please try again with a new name.')
+        
     if not name:
         name = generate_random_name()
-    else:
-        """"""
-        # TODO check for name already existing
-
+        
+    ctx.obj['existing_server_names'].add(name)
+        
     # Check if we have an SSH Key for that provider provisioned
     if provider not in ctx.obj['required_ssh_keys']:
         LogHandler.debug(f'No SSH Key not found for "{ provider }", I will add one to the build for you')
