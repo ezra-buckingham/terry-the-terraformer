@@ -78,7 +78,7 @@
 
       - name: Create the DNS redirector configuration file
         ansible.builtin.copy:
-          dest: /opt/socat/dns-redirector.conf
+          dest: /opt/socat/config.conf
           content: |
             1.1.1.1:153
       
@@ -87,7 +87,7 @@
           dest: /opt/socat/dns-redirector.sh
           content: |
             #!/bin/bash
-            /usr/bin/socat -T 5 udp4-listen:53,fork udp4:`cat /opt/socat/dns-redirector.conf`
+            /usr/bin/socat -T 5 udp4-listen:53,fork udp4:`cat /opt/socat/config.conf`
       
       - name: Create the Service File for the DNS Redirector
         ansible.builtin.copy: 

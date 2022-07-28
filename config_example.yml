@@ -25,6 +25,7 @@ ansible_configuration:
       user: terry
       public_ip: 8.8.8.8
       public_key: 
+  # Remote configurations in Git repositories that can be dynamically loaded into Ansible
   remote:
     - name:
       repo_url:
@@ -32,11 +33,13 @@ ansible_configuration:
       personal_access_token:
 
 slack:
+  # Slack Webhook to send notifications to upon completion
   webhook_url:
 
 elastic:
+  # FQDN or IP address of Elastic Server (must be on internet and accessible) formatted as 'server.elastic.com' or '8.8.8.8'
   elastic_server:
-  elastic_api_key: # API Key auth
+  elastic_api_key: 
 
 # ===================== Cloud Configurations =====================
 aws:
@@ -63,4 +66,5 @@ namecheap:
 # ===================== C2 Configurations =====================
 cobaltstrike:
   COBALTSTRIKE_PASSWORD:
+  # If left blank, a dummy profile will be deployed
   COBALTSTRIKE_MALLEABLE_C2:

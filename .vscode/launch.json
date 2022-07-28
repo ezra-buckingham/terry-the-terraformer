@@ -9,7 +9,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "docs", "-v", "-a", "-f", "-N", "create", 
+        "-o", "docs", "-v", "-a", "-f", "create", 
         "server", "-t", "bare", "-p", "aws", "server", "-t", "lighthouse", "-p", "aws"
       ],
       //"preLaunchTask": "Remove terry_testing files"
@@ -51,7 +51,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "testing", "-v", "reconfigure"
+        "-o", "documentation", "-v", "reconfigure"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },
@@ -76,7 +76,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "documentation", "destroy", "-r"
+        "-o", "docs", "destroy", "-r"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },
