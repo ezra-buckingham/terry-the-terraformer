@@ -580,8 +580,8 @@ class Categorize(Server):
         Server.__init__(self, name, provider, 'categorize', domain, containers=[], domain_to_impersonate=domain_to_impersonate)
         
         # We can only have one Categorization Server in a build request
-        if len(self.domain) != 1:
-            LogHandler.critical(f'Categorization Error: a domain map is required and with only one domain specified')
+        if not self.domain:
+            LogHandler.critical(f'Categorization Error: a domain is required')
         if not self.domain_to_impersonate:
             LogHandler.critical(f'Categorization Error: a domain to impersonate required')
 
