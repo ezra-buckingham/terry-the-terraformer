@@ -7,7 +7,7 @@ data "aws_route53_zone" "{{ uuid }}" { # Value provided by Jinja
 }
 
 {% for record in domain_records %}
-resource "aws_route53_record" "{{ record.safe_subdomain }}-{{ uuid }}" { # Value provided by Jinja
+resource "aws_route53_record" "{{ record.safe_subdomain }}-{{ record.record_type }}-{{ uuid }}" { # Value provided by Jinja
   count = 1
   zone_id = data.aws_route53_zone.{{ uuid }}.zone_id  # Value provided by Jinja
   {# If there is a length, give the subdomain, if not, leave blank #}
@@ -15,6 +15,7 @@ resource "aws_route53_record" "{{ record.safe_subdomain }}-{{ uuid }}" { # Value
   type = "{{ record.record_type }}" # Value provided by Jinja
   ttl = "300"
 
+  # If DKIM record, split strings by using \"\" 
   records = [
     {{ record.value }}
   ]

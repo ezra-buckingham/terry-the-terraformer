@@ -35,7 +35,7 @@
 
 - name: Set the UFW config to govern docker routing (or else firewall rules will fail for docker containers)
   ansible.builtin.copy:
-    path: /etc/ufw/after.rules
+    dest: /etc/ufw/after.rules
     content: |
       # Don't delete these required lines, otherwise there will be errors
       *filter

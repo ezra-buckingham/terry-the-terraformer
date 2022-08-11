@@ -9,8 +9,8 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "docs", "-v", "-a", "-f", "create", 
-        "server", "-t", "bare", "-p", "aws", "server", "-t", "lighthouse", "-p", "aws"
+        "-o", "smtp", "-v", "-f", "create", 
+        "server", "-t", "mailserver", "-p", "digitalocean", "-d", "focusfireandsecuity.net:aws"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },

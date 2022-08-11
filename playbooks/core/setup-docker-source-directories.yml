@@ -1,0 +1,8 @@
+- name: Create the "source" directories for each containers defined bind mounts
+  ansible.builtin.file:
+    path: "{{ volume.source }}"
+    state: directory
+  loop: "{{ container.volumes }}"
+  loop_control:
+    loop_var: volume
+    label: "{{ volume.source }}"

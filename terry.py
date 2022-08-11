@@ -3,6 +3,7 @@ from asyncio.events import BaseDefaultEventLoopPolicy
 from itertools import chain
 import json
 import logging
+from multiprocessing.sharedctypes import Value
 import os
 import re
 import sys
@@ -152,17 +153,21 @@ def destroy(ctx_obj, recursive):
 
     LogHandler.info(f'Destroying the "{ ctx_obj["operation"] }" plan')
 
-    # Check the operation exists
-    check_for_operation_directory()
+    if not ctx_obj['force']:
+        # Check the operation exists
+        check_for_operation_directory()
 
+        # Read in the build config
+        parse_build_manifest()
+
+        # Validate our credentials
+        validate_credentials(check_containers=False)
+        
+    else:
+        LogHandler.warn('Force flag  "-f" / "--force" provided, Terry will try to destory without checking for creds / reading a manifest. THIS MAY CAUSE ERRORS!')
+        
     # Prepare all required handlers
     prepare_core_handlers()
-
-    # Read in the build config
-    parse_build_manifest()
-
-    # Validate our credentials
-    validate_credentials(check_containers=False)
 
     success, stdout, stderr = ctx_obj['terraform_handler'].destroy_plan(auto_approve=ctx_obj['auto_approve'])
 
@@ -211,7 +216,7 @@ def create(ctx_obj):
         LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable)')
         Path(ctx_obj['op_directory']).mkdir()
         # Does not account for situations where op_directory exists but these children do not
-        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'ansible/extra_tasks', 'nebula/']:
+        for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'ansible/extra_tasks', 'ansible/extra_files', 'nebula/']:
             Path(ctx_obj['op_directory']).joinpath(path).mkdir(parents=True)
 
         # Generate the SSH Keys and write them to disk
@@ -241,8 +246,8 @@ def create(ctx_obj):
     
 
 @create.result_callback()
-@click.pass_obj
-def build_infrastructure(ctx_obj, resources):
+@click.pass_context
+def build_infrastructure(ctx, resources):
     # Make sure we have credentials for each of the providers
     validate_credentials(check_containers=True)
 
@@ -253,23 +258,23 @@ def build_infrastructure(ctx_obj, resources):
     # Create the terraform plan and build it 
     LogHandler.info('Building Terraform plan')
     plan = build_terraform_plan()
-    plan_file = Path(ctx_obj['op_directory']).joinpath(f'terraform/{ ctx_obj["operation"] }_plan.tf')
+    plan_file = Path(ctx.obj['op_directory']).joinpath(f'terraform/{ ctx.obj["operation"] }_plan.tf')
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
 
     # Apply the plan and map results back
-    ctx_obj['terraform_handler'].apply_plan(auto_approve=ctx_obj['auto_approve'])
+    ctx.obj['terraform_handler'].apply_plan(auto_approve=ctx.obj['auto_approve'])
     LogHandler.info('Terraform apply successful!')
-    return_code, stdout, stderr = ctx_obj['terraform_handler'].show_state(json=True)
+    return_code, stdout, stderr = ctx.obj['terraform_handler'].show_state(json=True)
     results = json.loads(stdout)['values']['root_module']['resources']
     map_terraform_values_to_resources(results)
 
     # Configure Nebula
-    if not ctx_obj['no_nebula']:
+    if not ctx.obj['no_nebula']:
         LogHandler.info('Setting up Nebula configurations and certificates')
-        ctx_obj['nebula_handler'].generate_ca_certs()
-        for resource in [ server for server in  ctx_obj['resources'] if isinstance(server, Server) ]:
-            assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.uuid)
+        ctx.obj['nebula_handler'].generate_ca_certs()
+        for resource in [ server for server in  ctx.obj['resources'] if isinstance(server, Server) ]:
+            assigned_nebula_ip = ctx.obj['nebula_handler'].generate_client_cert(resource.uuid)
             resource.nebula_ip = assigned_nebula_ip
         extract_nebula_config()
     else:
@@ -277,10 +282,26 @@ def build_infrastructure(ctx_obj, resources):
 
     create_build_manifest()
     prepare_and_run_ansible()
+    
+    # Now we need to check for Mailservers, to see if additional DNS entries are required
+    mailservers = [ x for x in ctx.obj["resources"] if isinstance(x, Mailserver) ]
+    for mailserver in mailservers:
+        dkim_record = Path(ctx.obj['op_directory']).joinpath(f'ansible/extra_files/{ mailserver.uuid }_dkim_default.txt')
+        dkim_record.read_text()
+        
+        # Parse the DKIM file
+        dkim_record = dkim_record.split('\t')
+        dkim_host = dkim_record[0]
+        dkim_value = re.sub('[()" ]', '', dkim_record[3])
+        dkim_value = dkim_value.replace('\n', '\\"\\"')
+        
+        # Run the add with the new DKIM
+        ctx.invoke
+        
 
     LogHandler.info('Ansible setup complete')
-    ctx_obj['end_time'] = get_formatted_time()
-    ctx_obj['slack_handler'].send_success(ctx_obj)
+    ctx.obj['end_time'] = get_formatted_time()
+    ctx.obj['slack_handler'].send_success(ctx.obj)
 
     LogHandler.info('Terry building complete! Enjoy the tools you tool!')
 
@@ -446,6 +467,19 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
     elif type == 'lighthouse':
         server = Lighthouse(name, provider, priority_domain)
         ctx.obj['resources'].append(server)
+    elif type == 'mailserver':
+        server = Mailserver(name, provider, priority_domain)
+        main_domain = domains.pop(0)
+        base_domain = Domain.get_domain(main_domain[0])
+        mx_domain_value = f'mx.{ main_domain[0] }'
+        spf_domain_value = 'v=spf1 mx ~all'
+        server.domain = mx_domain_value
+        
+        ctx.obj['resources'].append(server)
+        
+        ctx.invoke(domain, provider=main_domain[1], domain=mx_domain_value, type='A', server_name=server.uuid)
+        ctx.invoke(domain, provider=main_domain[1], domain=mx_domain_value, type='MX', value=f'10 { mx_domain_value }')
+        ctx.invoke(domain, provider=main_domain[1], domain=base_domain, type='TXT', value=spf_domain_value)
     elif type == 'redirector':
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
         # Check how many domains we have set

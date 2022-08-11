@@ -48,7 +48,11 @@ class AnsibleHandler:
             return_code = return_value.rc
             
             if return_code == 1:
-                LogHandler.error(f'Ansible Error (loading key error is normal): { return_value.stdout.read() }')
+                message = return_value.stdout.read()
+                if 'Error loading key' in str(message):
+                    LogHandler.warn(f'Known Ansible Error: { message } (ignore if Ansible safely continues)')
+                else:
+                    LogHandler.error(f'Ansible Error: { message }')
 
             counter += 1
 

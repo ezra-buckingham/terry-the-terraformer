@@ -358,6 +358,9 @@ class Domain(TerraformObject):
             self.safe_subdomain = subdomain.replace('.', '-')
             self.record_type = record_type
             self.value = value
+            
+            if len(self.safe_subdomain) == 0:
+                self.safe_subdomain = 'ROOT-DOMAIN'
 
         
         def to_dict(self):
@@ -521,6 +524,8 @@ class Server(AnsibleControlledObject, TerraformObject):
             server = Bare(name, provider, domain, containers)
         elif type == 'lighthouse':
             server = Lighthouse(name, provider, domain)
+        elif type == 'mailserver':
+            server = Mailserver(name, provider, domain, containers)
         
         server.uuid = uuid
         server.public_ip = public_ip
@@ -551,7 +556,7 @@ class Lighthouse(Server):
 class Mailserver(Server):
     """Class for representing a mailserver"""
 
-    def __init__(self, name, provider, domain, containers, mailserver_type):
+    def __init__(self, name, provider, domain, containers=[], mailserver_type=''):
         self.containers = containers + [ mailserver_type ]
 
         Server.__init__(self, name, provider, 'mailserver', domain, containers)

@@ -1,6 +1,6 @@
 
 {% for record in domain_records %}
-resource "godaddy_domain_record" "{{ record.safe_subdomain }}-{{ uuid }}" {
+resource "godaddy_domain_record" "{{ record.safe_subdomain }}-{{ record.record_type }}-{{ uuid }}" {
   domain = "{{ domain }}"
 
   record {

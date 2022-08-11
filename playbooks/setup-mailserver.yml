@@ -13,25 +13,28 @@
   
   - name: Set the options for PostFix to install non-interactively
     shell: |
-      debconf-set-selections <<< "postfix postfix/mailname string {{ mailing_domain }}" 
+      debconf-set-selections <<< "postfix postfix/mailname string {{ domain }}"
       debconf-set-selections <<< "postfix postfix/main_mailer_type string 'Internet Site'"
+    args:
+      executable: /bin/bash
 
-  - name: Install Mailutils (Includes PostFix) and OpenDKIM
+  - name: Install Mailutils, PostFix and OpenDKIM
     apt:
       pkg: 
         - mailutils
+        - postfix
         - opendkim
         - opendkim-tools
 
   - name: Allow PostFix to only listen on the localhost
     ansible.builtin.replace:
       path: '/etc/postfix/main.cf'
-      regexp: '^inet_interfaces'
+      regexp: '^(inet_interfaces)(.*)$'
       replace: 'inet_interfaces = loopback-only'
 
   - name: Create a forwarding email alias for root
     ansible.builtin.copy:
-      path: /etc/aliases
+      dest: /etc/aliases
       content: |
         # /etc/aliases
         mailer-daemon: postmaster
@@ -62,9 +65,9 @@
   - name: Enforce firewall rules
     include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
   
-  - name: Request the SSL cert for the domain
-    shell: |
-      certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ mailing_domain }} 
+  # - name: Request the SSL cert for the domain
+  #   shell: |
+  #     certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ domain }} 
 
   - name: Close the Firewall 
     shell: |
@@ -76,29 +79,29 @@
   - name: Edit PostFix configuration to use new SSL Certificate
     ansible.builtin.replace:
       path: '/etc/postfix/main.cf'
-      regexp: '^smtpd_tls_cert_file'
-      replace: 'smtpd_tls_cert_file=/etc/letsencrypt/live/{{ mailing_domain }}/fullchain.pem'
+      regexp: '^(smtpd_tls_cert_file)(.*)$'
+      replace: 'smtpd_tls_cert_file=/etc/letsencrypt/live/{{ domain }}/fullchain.pem'
 
   - name: Edit PostFix configuration to use new SSL Certificate Key
     ansible.builtin.replace:
       path: '/etc/postfix/main.cf'
-      regexp: '^smtpd_tls_key_file'
-      replace: 'smtpd_tls_key_file=/etc/letsencrypt/live/{{ mailing_domain }}/privkey.pem'
+      regexp: '^(smtpd_tls_key_file)(.*)$'
+      replace: 'smtpd_tls_key_file=/etc/letsencrypt/live/{{ domain }}/privkey.pem'
 
   - name: Allow the PostFix user access to the OpenDKIM group
     shell: |
       gpasswd -a postfix opendkim
 
-  - name: change the Canonicalization configuration for OpenDKIM 
+  - name: Change the Canonicalization configuration for OpenDKIM 
     ansible.builtin.replace:
       path: /etc/opendkim.conf
-      regex: '^Canonicalization'
+      regexp: '^(Canonicalization)(.*)$'
       replace: 'Canonicalization   relaxed/simple'
   
   - name: Add additional configuration to OpenDKIM
     ansible.builtin.replace:
       path: /etc/opendkim.conf
-      after: '^SubDomains'
+      regexp: '^(SubDomains)(.*)$'
       replace: |
         SubDomains		no
         ######### TERRY BASE CONFIG #########
@@ -111,6 +114,7 @@
         SigningTable        refile:/etc/opendkim/signing.table
         ExternalIgnoreList  /etc/opendkim/trusted.hosts
         InternalHosts       /etc/opendkim/trusted.hosts
+        LogWhy              yes
         ######### TERRY BASE CONFIG #########
 
   - name: Create the OpenDKIM folder structure
@@ -121,40 +125,44 @@
     loop:
       - '/etc/opendkim'
       - '/etc/opendkim/keys'
-      - '/etc/opendkim/keys/{{ mailing_domain }}'
+      - '/etc/opendkim/keys/{{ domain }}'
 
   - name: Create the base OpenDKIM signing table 
     ansible.builtin.copy:
-      path: /etc/opendkim/signing.table
+      dest: /etc/opendkim/signing.table
       content: |
-        *@{{ mailing_domain }}    default._domainkey.{{ mailing_domain }}
+        *@{{ domain }}    default._domainkey.{{ domain }}
 
   - name: Create the base OpenDKIM key table 
     ansible.builtin.copy:
-      path: /etc/opendkim/signing.table
+      dest: /etc/opendkim/signing.table
       content: |
-        default._domainkey.{{ mailing_domain }}     {{ mailing_domain }}:default:/etc/opendkim/keys/{{ mailing_domain }}/default.private
+        default._domainkey.{{ domain }}     {{ domain }}:default:/etc/opendkim/keys/{{ domain }}/default.private
 
   - name: Create the base OpenDKIM trusted hosts
     ansible.builtin.copy:
-      path: /etc/opendkim/trusted.hosts
+      dest: /etc/opendkim/trusted.hosts
       content: |
         127.0.0.1
         localhost
-        *.{{ mailing_domain }}
+        *.{{ domain }}
 
   - name: Generate the DKIM Key Pair
     shell: |
-      opendkim-genkey -b 2048 -d {{ mailing_domain }} -D /etc/opendkim/keys/{{ mailing_domain }} -s default -v
+      opendkim-genkey -b 2048 -d {{ domain }} -D /etc/opendkim/keys/{{ domain }} -s default -v
 
   - name: Change ownership and permissions on the new key file
     ansible.builtin.file:
-      path: '/etc/opendkim/keys/{{ mailing_domain }}/default.private'
-      state: present
+      path: '/etc/opendkim/keys/{{ domain }}/default.private'
       owner: opendkim
       group: opendkim
       mode: '0600'
 
+  - name: Copy the DKIM key back to the Terry host
+    ansible.builtin.fetch:
+      src: /etc/opendkim/keys/mx.focusfireandsecuity.net/default.txt
+      dest: "{{ op_directory }}/ansible/extra_files/{{ uuid }}_dkim_default.txt"
+    
   - name: Create the folder to hold the OpenDKIM socket 
     ansible.builtin.file:
       path: /var/spool/postfix/opendkim
@@ -165,13 +173,13 @@
   - name: Change OpenDKIM socket creation path (master config)
     ansible.builtin.replace: 
       path: /etc/opendkim.conf
-      regex: '^Socket'
+      regexp: '^(Socket)(.*)$'
       replace: "Socket    local:/var/spool/postfix/opendkim/opendkim.sock"
 
   - name: Change OpenDKIM socket creation path (default config)
     ansible.builtin.replace: 
       path: /etc/default/opendkim
-      regex: '^SOCKET'
+      regexp: '^(SOCKET)(.*)$'
       replace: "SOCKET=\"local:/var/spool/postfix/opendkim/opendkim.sock\""
 
   - name: Allow PostFix to call OpenDKIM using the milter protocol
@@ -184,10 +192,12 @@
         smtpd_milters = local:opendkim/opendkim.sock
         non_smtpd_milters = $smtpd_milters
         ######### TERRY MILTER CONFIG #########
+      state: present
   
   - name: Restart PostFix and OpenDKIM 
     shell: |
-      systemctl restart opendkim postfix
+      systemctl stop opendkim postfix
+      systemctl enable opendkim postfix --now
 
   - name: Open all SMTP ports
     shell: |

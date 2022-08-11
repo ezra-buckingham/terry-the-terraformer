@@ -20,12 +20,15 @@ aws:
         lighthouse: 't2.medium'
         redirector: 't2.micro'
         categorize: 't2.micro'
+        mailserver: 't2.micro'
+        bare: 't2.medium'
       disk_size:
         global: 32
         teamserver: 64
         lighthouse: 64
         redirector: 32
         categorize: 32
+        mailserver: 64
         bare: 64
 
 ############ DigitalOcean ############
@@ -47,12 +50,15 @@ digitalocean:
         lighthouse: 's-2vcpu-4gb'
         redirector: 's-2vcpu-4gb'
         categorize: 's-2vcpu-4gb'
+        mailserver: 's-2vcpu-4gb'
+        bare: 's-4vcpu-8gb'
       disk_size: 
         global: 32
         teamserver: 64 
         lighthouse: 64
         redirector: 32
         categorize: 32
+        mailserver: 64
         bare: 64
 
 ############## Azure ############

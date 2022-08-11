@@ -18,8 +18,8 @@
     when: containers is defined
     block:
 
-    - name: Install Docker on the host
-      include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
+    # - name: Install Docker on the host
+    #   include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
 
     - name: Create directories for each containers for on the host
       ansible.builtin.file:
@@ -45,14 +45,6 @@
         - name: Get Docker configuration for selected continers from container_mappings.yml
           set_fact:
             docker_services: '{{ containers.keys() | list | map("extract", services) }}'
-
-        - name: Create the "source" directories for each containers defined bind mounts
-          ansible.builtin.file:
-            path: /opt/container/{{ item.key }}/mount
-            state: directory
-          loop: "{{ docker_services }}"
-          loop_control:
-            label: "{{ item.key }}"
 
         - name: Build the valid docker-compose file locally based on the docker_services fact (stripping out Terry-specific values)
           ansible.builtin.template:
@@ -89,6 +81,12 @@
         - name: Unescape all Jinja from each file as defined in jinja_unescape_paths
           include_tasks: '{{ playbook_dir }}/core/unescape-jinja.yml'
 
+    - name: Setup source directories as defined in docker compose
+      include_tasks: '{{ playbook_dir }}/core/setup-docker-source-directories.yml'  
+      loop: "{{ docker_services }}"
+      loop_control:
+        loop_var: container
+        label: "{{ container.container_name }}"
 
     - name: Deploy the valid and complete docker-compose file
       ansible.builtin.template:

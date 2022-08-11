@@ -41,8 +41,8 @@ def check_for_operation_directory(ctx_obj):
     if not ctx_obj['op_directory'].exists():
         LogHandler.critical(f'No deployment found with the name "{ ctx_obj["operation"] }"')
 
-@click.pass_obj
-def prepare_lighthouse(ctx_obj):
+@click.pass_context
+def prepare_lighthouse(ctx):
     """Prepare the nebula handler object for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']
     This is split out as we may want not want to search for the Nebula Binary too early in a build as it might not be needed
 
@@ -53,8 +53,8 @@ def prepare_lighthouse(ctx_obj):
     """
 
     # Get all the lighthouses from the resources
-    lighthouses = [ x for x in ctx_obj["resources"] if isinstance(x, Lighthouse) ]
-    servers = [ resource for resource in ctx_obj['resources'] if isinstance(resource, Server) ]
+    lighthouses = [ x for x in ctx.obj["resources"] if isinstance(x, Lighthouse) ]
+    servers = [ resource for resource in ctx.obj['resources'] if isinstance(resource, Server) ]
     
     # Ensure we only have one lighthouse
     if len(lighthouses) > 1:
@@ -66,8 +66,6 @@ def prepare_lighthouse(ctx_obj):
         response = LogHandler.confirmation('Would you like me to add a Lighthouse to the current build?')
         if not response:
             return False
-        
-        lighthouse_name = generate_random_name()
 
         # Now get the provider from the user
         provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
@@ -75,39 +73,39 @@ def prepare_lighthouse(ctx_obj):
             LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {TerraformObject.get_terraform_mappings(simple_list=True)}', is_fatal=False)
             provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
 
-        lighthouse = Lighthouse(lighthouse_name, provider, None)
-        ctx_obj["resources"].insert(0, lighthouse)
+        from terry import server
+        ctx.invoke(server, provider=provider, type='lighthouse')
     
         return True
         
     # Check with user if we want to build nebula when there are many servers in the build
     if len(lighthouses) == 0:
-        if not ctx_obj['no_nebula']:
+        if not ctx.obj['no_nebula']:
             LogHandler.warn('Nebula configured for this build, but no Lighthouses found. Either use the "-N" / "--no_nebula" flag or I can build one for you now.')
             result = add_lighthouse()
             if not result:
                 LogHandler.warn('Opting out of Nebula for this build')
-                ctx_obj['no_nebula'] = not ctx_obj['no_nebula']
+                ctx.obj['no_nebula'] = not ctx.obj['no_nebula']
             else:
-                prepare_lighthouse()
+                return prepare_lighthouse()
         
-        if not ctx_obj['no_elastic']:
+        if not ctx.obj['no_elastic']:
             LogHandler.warn('Elastic configured for this build, but no Lighthouses found. Either use the "-Ne" / "--no_elastic" flag or I can build one for you now.')
             result = add_lighthouse()
             if not result:
                 LogHandler.warn('Opting out of Elastic for this build')
-                ctx_obj['no_elastic'] = not ctx_obj['no_elastic']
+                ctx.obj['no_elastic'] = not ctx.obj['no_elastic']
             else:
-                prepare_lighthouse()
+                return prepare_lighthouse()
                 
-    if not ctx_obj['no_nebula']:
+    if not ctx.obj['no_nebula']:
         LogHandler.debug('Nebula has been configured for this build')
-        nebula_path = ctx_obj['config_contents']['global']['nebula_path']
-        ctx_obj['nebula_handler'] = NebulaHandler(nebula_path, ctx_obj['config_contents']['global']['nebula_subnet'], Path(ctx_obj['op_directory']).joinpath('nebula'))
+        nebula_path = ctx.obj['config_contents']['global']['nebula_path']
+        ctx.obj['nebula_handler'] = NebulaHandler(nebula_path, ctx.obj['config_contents']['global']['nebula_subnet'], Path(ctx.obj['op_directory']).joinpath('nebula'))
     else:
         LogHandler.warn('This build has opted out of Nebula')
         
-    if not ctx_obj['no_elastic']:
+    if not ctx.obj['no_elastic']:
         LogHandler.debug('Elastic has been configured for this build')
         check_for_required_value('elastic_server')
         check_for_required_value('elastic_api_key')
@@ -715,7 +713,7 @@ def get_implemented_server_types():
         `server_types (List)`: List of server types
     """
 
-    server_types = ['bare', 'categorize', 'teamserver', 'lighthouse', 'redirector']
+    server_types = ['bare', 'categorize', 'teamserver', 'lighthouse', 'redirector', 'mailserver']
     return server_types
 
 
