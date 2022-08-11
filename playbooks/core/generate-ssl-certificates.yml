@@ -10,12 +10,6 @@
     state: touch
   when: not ssl_file_result.stat.exists
 
-# - name: Add the ServerAlias to the configuation file
-#   ansible.builtin.replace:
-#     path: /etc/apache2/sites-available/000-default-le-ssl.conf
-#     regexp: ^<\/VirtualHost>$
-#     replace: '\nServerAlias {{ domain }}\n</VirtualHost>'
-
 - name: Run Certbot for the domain
   shell: |
     certbot --apache --no-eff-email --agree-tos -m {{ main_email }} -n -d {{ domain }}
