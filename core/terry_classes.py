@@ -506,6 +506,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         nebula_ip = dict.get('nebula_ip')
         redirector_type = dict.get('redirector_type')
         redirect_to = dict.get('redirect_to')
+        domain_to_impersonate = dict.get('domain_to_impersonate')
         dict_containers = dict.get('containers', [])
 
         # Map the containers back
@@ -519,7 +520,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         elif type == 'redirector':
             server = Redirector(name, provider, domain, redirector_type, redirect_to)
         elif type == 'categorize':
-            server = Categorize(name, provider, domain, redirect_to)
+            server = Categorize(name, provider, domain, domain_to_impersonate)
         elif type == 'bare':
             server = Bare(name, provider, domain, containers)
         elif type == 'lighthouse':
