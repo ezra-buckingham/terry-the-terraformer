@@ -20,7 +20,7 @@ resource "aws_instance" "{{ uuid }}" { # Value Provided by Jinja
 
   root_block_device {
     delete_on_termination = true
-    volume_size = {{ terraform_disk_size_reference }}
+    volume_size = {{ terraform_disk_size_reference }} # Value provided by Jinja
   }
 
   tags = {

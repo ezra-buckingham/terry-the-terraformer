@@ -111,7 +111,6 @@ def prepare_lighthouse(ctx):
         check_for_required_value('elastic_api_key')
     else:
         LogHandler.warn('This build has opted out of Elastic')
-        
 
 
 @click.pass_context
@@ -189,8 +188,15 @@ def read_build_manifest(ctx_obj):
         build_manifest_contents = {
             'build_uuid': ctx_obj['build_uuid'],
             'operation': ctx_obj['operation'],
-            'lighthouse_nebula_ip': None,
-            'lighthouse_nebula_ip': None,
+            'nebula': {
+                'no_nebula': None,
+                'lighthouse_nebula_ip': None,
+                'lighthouse_public_ip': None
+            },
+            'elastic' : {
+                'no_elastic': None,
+                'elastic_server': None  
+            },
             'resources': []
         }
         build_manifest_yaml = yaml.safe_dump(build_manifest_contents, sort_keys=True)
@@ -214,6 +220,9 @@ def parse_build_manifest(ctx_obj):
     build_manifest = read_build_manifest()
     ctx_obj['build_uuid'] = build_manifest['build_uuid']
     ctx_obj['operation'] = build_manifest['operation']
+    ctx_obj['no_nebula'] = build_manifest['nebula']['no_nebula']
+    ctx_obj['no_elastic'] = build_manifest['elastic']['no_elastic']
+    ctx_obj['elastic_server'] = build_manifest['elastic']['elastic_server']
 
     # Check if there are resources listed in the build manifest and append to all resources
     if build_manifest['resources'] and len(build_manifest['resources']) > 0:
@@ -261,8 +270,15 @@ def create_build_manifest(ctx_obj, full_replace=False):
     new_manifest = {
         **existing_build_manifest,
         'resources': added_manifest_items,
-        'lighthouse_nebula_ip': ctx_obj.get('lighthouse_nebula_ip'), 
-        'lighthouse_public_ip': ctx_obj.get('lighthouse_public_ip')
+        'nebula': {
+            'no_nebula': ctx_obj.get('no_nebula'),
+            'lighthouse_nebula_ip': ctx_obj.get('lighthouse_nebula_ip'), 
+            'lighthouse_public_ip': ctx_obj.get('lighthouse_public_ip')
+        },
+        'elastic' : {
+            'no_elastic': ctx_obj.get('no_elastic'),
+            'elastic_server': ctx_obj.get('elastic_server') 
+        }
     }
     new_manifest_yaml = yaml.safe_dump(new_manifest, sort_keys=True)
 
@@ -515,6 +531,7 @@ def build_ansible_inventory(ctx_obj):
         global_vars["operation"] = str(ctx_obj["operation"])
         global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
         global_vars["nebula"] = not ctx_obj['no_nebula']
+        global_vars["elastic"] = not ctx_obj['no_elastic']
         # If installing Nebula, give the additional vars needed for configuring it on the hosts
         if global_vars["nebula"]:
             global_vars["lighthouse_public_ip"] = ctx_obj['lighthouse_public_ip']
@@ -641,7 +658,8 @@ def check_for_required_value(ctx_obj, value_name, hide_input=False):
     cli_value = ctx_obj.get(value_name.lower(), None)
     if cli_value:
         LogHandler.debug(f'{value_name}: Value FOUND in CLI arguments')
-        required_value.set(value_name, cli_value)
+        required_value.set(cli_value)
+        ctx_obj[value_name.lower()] = cli_value
         return required_value
     else:
         LogHandler.debug(f'{value_name}: Value NOT FOUND in CLI arguments')
@@ -649,6 +667,7 @@ def check_for_required_value(ctx_obj, value_name, hide_input=False):
     # Second, check the env variable in case it was set manually
     if required_value.get(): 
         LogHandler.debug(f'{value_name}: Value FOUND in envionment variables')
+        ctx_obj[value_name.lower()] = required_value.get()
         return required_value
     else: 
         LogHandler.debug(f'{value_name}: Value NOT FOUND in envionment variables')
@@ -659,6 +678,7 @@ def check_for_required_value(ctx_obj, value_name, hide_input=False):
     if config_value:
         LogHandler.debug(f'{value_name}: Value FOUND in config file')
         required_value.set(config_value)
+        ctx_obj[value_name.lower()] = config_value
         return required_value
     else:
         LogHandler.debug(f'{value_name}: Value NOT FOUND in config file')
@@ -667,6 +687,7 @@ def check_for_required_value(ctx_obj, value_name, hide_input=False):
     if not required_value.get():
         returned_value = LogHandler.get_input(f'Enter the {value_name}', hide_input=hide_input)
         required_value.set(returned_value)
+        ctx_obj[value_name.lower()] = returned_value
         return required_value
 
 
