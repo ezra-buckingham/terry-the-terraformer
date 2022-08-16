@@ -28,6 +28,7 @@ There are known issues to Terry. Here are some of the ones I have identified:
 * No central managment of wildcard certs (wildcard cert generation likely coming in the future)
 * PTR records need to be determined before SMTP will work
   * DigitalOcean will create PTR records from the name of the host, need to make sure name of host is the FQDN
+* No way for end users to modify the templates without being overwritten (may need to add to terraform config so users can manage things like default security groups)
 
 ## What's next?
 
