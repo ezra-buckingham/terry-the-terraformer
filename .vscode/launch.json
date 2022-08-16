@@ -10,7 +10,7 @@
       "console": "integratedTerminal",
       "args": [
         "-o", "smtp2", "-v", "-f", "create", 
-        "server", "-t", "mailserver", "-p", "digitalocean", "-d", "53fmr.com:aws"
+        "server", "-t", "mailserver", "-p", "digitalocean", "-d", ""
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },
@@ -76,7 +76,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "docs", "destroy", "-r"
+        "-o", "documentation", "destroy", "-r"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },

@@ -107,3 +107,22 @@ class TerraformHandler:
             return False, stdout, stderr
         elif return_code == 2:  # Changes to be made
             return True, stdout, stderr
+
+    def __handle_return(return_tuple):
+        """Returns the
+
+        Args:
+            `return_tuple (tuple)`: _description_
+        """
+        
+        return_code = return_tuple[0]
+        stdout = return_tuple[1]
+        stderr = return_tuple[2]
+        
+        if return_code == 0:
+            return True, stdout, stderr
+        elif return_code == 1:
+            LogHandler.critical(f'Terraform returned an error: {stderr}')
+            return False, stdout, stderr
+        elif return_code == 2:  # Changes to be made
+            return True, stdout, stderr

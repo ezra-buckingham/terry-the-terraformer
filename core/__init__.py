@@ -1,6 +1,5 @@
 import random
 import re
-from unittest import result
 import click
 import yaml
 
@@ -107,7 +106,8 @@ def prepare_lighthouse(ctx):
         
     if not ctx.obj['no_elastic']:
         LogHandler.debug('Elastic has been configured for this build')
-        check_for_required_value('elastic_server')
+        server = check_for_required_value('elastic_server')
+        if not len(server.get().split(':')) == 2: LogHandler.critical('Elastic server must be an IP address or FQDN and port (ex "elastic.example.com:9200")')
         check_for_required_value('elastic_api_key')
     else:
         LogHandler.warn('This build has opted out of Elastic')
@@ -188,12 +188,10 @@ def read_build_manifest(ctx_obj):
         build_manifest_contents = {
             'build_uuid': ctx_obj['build_uuid'],
             'operation': ctx_obj['operation'],
-            'nebula': {
+            'config': {
                 'no_nebula': None,
                 'lighthouse_nebula_ip': None,
-                'lighthouse_public_ip': None
-            },
-            'elastic' : {
+                'lighthouse_public_ip': None,
                 'no_elastic': None,
                 'elastic_server': None  
             },
@@ -220,9 +218,13 @@ def parse_build_manifest(ctx_obj):
     build_manifest = read_build_manifest()
     ctx_obj['build_uuid'] = build_manifest['build_uuid']
     ctx_obj['operation'] = build_manifest['operation']
-    ctx_obj['no_nebula'] = build_manifest['nebula']['no_nebula']
-    ctx_obj['no_elastic'] = build_manifest['elastic']['no_elastic']
-    ctx_obj['elastic_server'] = build_manifest['elastic']['elastic_server']
+    
+    build_config = build_manifest['config']
+    ctx_obj['no_nebula'] = build_config.get('no_nebula', True)
+    ctx_obj['lighthouse_public_ip'] = build_config.get('lighthouse_public_ip')
+    ctx_obj['lighthouse_nebula_ip'] = build_config.get('lighthouse_nebula_ip')
+    ctx_obj['no_elastic'] = build_config.get('no_elastic', True)
+    ctx_obj['elastic_server'] = build_config.get('elastic_server')
 
     # Check if there are resources listed in the build manifest and append to all resources
     if build_manifest['resources'] and len(build_manifest['resources']) > 0:
@@ -241,14 +243,12 @@ def parse_build_manifest(ctx_obj):
 
             ctx_obj['required_providers'].add(resource.provider)
             ctx_obj['resources'].append(resource)
-        
-        extract_nebula_config()
 
     return build_manifest
 
 
 @click.pass_obj
-def create_build_manifest(ctx_obj, full_replace=False):
+def create_build_manifest(ctx_obj):
     """Create the build manifest with all the current build objects
 
     Args:
@@ -261,21 +261,16 @@ def create_build_manifest(ctx_obj, full_replace=False):
 
     # Read in the existing build manifest
     existing_build_manifest = read_build_manifest()
-    if full_replace:
-        LogHandler.debug('Doing full replacement of the build manifest resources')
-        existing_build_manifest.pop('resources')
 
     # Get the items from the current build an create the new manifest
     added_manifest_items = [ { resource.resource_type: resource.to_dict() } for resource in ctx_obj['resources'] ]
     new_manifest = {
         **existing_build_manifest,
         'resources': added_manifest_items,
-        'nebula': {
+        'config': {
             'no_nebula': ctx_obj.get('no_nebula'),
             'lighthouse_nebula_ip': ctx_obj.get('lighthouse_nebula_ip'), 
-            'lighthouse_public_ip': ctx_obj.get('lighthouse_public_ip')
-        },
-        'elastic' : {
+            'lighthouse_public_ip': ctx_obj.get('lighthouse_public_ip'),
             'no_elastic': ctx_obj.get('no_elastic'),
             'elastic_server': ctx_obj.get('elastic_server') 
         }
@@ -323,10 +318,6 @@ def validate_credentials(ctx_obj, check_containers=True):
         current_provider = Provider(provider)
         ctx_obj['required_providers'].append(current_provider)
 
-    if not ctx_obj['no_elastic']:
-        check_for_required_value('elastic_server')
-        check_for_required_value('elastic_api_key')
-     
     LogHandler.info('All required credentials found')
     
 
@@ -364,30 +355,6 @@ def retreive_remote_configurations(ctx_obj):
     LogHandler.info('Parsing of config for remote configuration definitions complete')
 
     return ctx_obj["config_contents"]["ansible_configuration"]["remote"]
-
-
-@click.pass_obj
-def extract_nebula_config(ctx_obj):
-    """Extracts the Lighthouse's Nebula IP as well as Public IP and passes that to the Click Context
-
-    Args:
-        `None`
-    Returns:
-        `nebula_ip (str)`, `public_ip (str)`: The Nebula IP and Public IP of the Lighthouse (`None`, `None` if not found)
-    """
-
-    LogHandler.debug('Getting the Lighthouse Public IP and Nebula IP from build manifest')
-
-    for resource in ctx_obj['resources']:
-        if isinstance(resource, Lighthouse):
-            ctx_obj['lighthouse_public_ip'] = resource.public_ip
-            ctx_obj['lighthouse_nebula_ip'] = resource.nebula_ip
-            return resource.nebula_ip, resource.public_ip
-    
-    LogHandler.debug('No Lighthouse found in build manifest, assuming Nebula was not configured...')
-    ctx_obj['no_nebula'] = True
-
-    return None, None
 
 
 @click.pass_obj

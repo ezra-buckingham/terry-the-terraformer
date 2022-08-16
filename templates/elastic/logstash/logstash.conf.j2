@@ -363,7 +363,7 @@ filter {
 }
 output {
   elasticsearch {
-    hosts => [ "https://{{ lookup('env', 'ELASTIC_SERVER') }}:9200" ]
+    hosts => [ "https://{{ lookup('env', 'ELASTIC_SERVER') }}" ]
     index => "logs-{{ operation }}"
     api_key => "{{ lookup('env', 'ELASTIC_API_KEY') }}"
     action => "create"

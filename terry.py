@@ -1,9 +1,7 @@
 #!/usr/bin/python3
-from asyncio.events import BaseDefaultEventLoopPolicy
-from itertools import chain
+
 import json
 import logging
-from multiprocessing.sharedctypes import Value
 import os
 import re
 import sys
@@ -26,7 +24,7 @@ from core import *
     Name for project or operation
     ''')
 @click.option('-a', '--auto_approve', is_flag=True, default=False, help='''
-    Auto approve the Terraform apply commands (only works when building, destory will auto-approve by default)
+    Auto approve the Terraform commands
     ''')
 @click.option('-f', '--force', is_flag=True, default=False, help='''
     Force the build to go through, even if a deployment already exists with the opration name listed
@@ -56,7 +54,7 @@ from core import *
     Password used to authenticate to the container registry (required if deploying containers)
     ''')
 @click.option('-eS', '--elastic_server', help='''
-    Elasticsearch public ip address or FQDN (for centralized logging)
+    Elasticsearch public ip address or FQDN (for centralized logging) and port
     ''')
 @click.option('-eK', '--elastic_api_key', help='''
     API Key used to authenticate to the Elasticsearch server / cluster
@@ -276,7 +274,9 @@ def build_infrastructure(ctx, resources):
         for resource in [ server for server in  ctx.obj['resources'] if isinstance(server, Server) ]:
             assigned_nebula_ip = ctx.obj['nebula_handler'].generate_client_cert(resource.uuid)
             resource.nebula_ip = assigned_nebula_ip
-        extract_nebula_config()
+            if isinstance(resource, Lighthouse):
+                ctx.obj['lighthouse_public_ip'] = resource.public_ip
+                ctx.obj['lighthouse_nebula_ip'] = resource.nebula_ip
     else:
         LogHandler.info('Skipping setting up Nebula configurations and certificates')
 
