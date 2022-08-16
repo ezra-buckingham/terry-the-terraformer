@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="logos/terry-whitebg.png" width="400" title="Terry Logo">
+  <img src=".docs/terry-whitebg.png" width="400" title="Terry Logo">
 </p>
 
 # Terry the Terraformer
