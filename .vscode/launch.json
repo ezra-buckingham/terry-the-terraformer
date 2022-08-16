@@ -9,8 +9,7 @@
       "program": "./terry.py",
       "console": "integratedTerminal",
       "args": [
-        "-o", "smtp2", "-v", "-f", "create", 
-        "server", "-t", "mailserver", "-p", "digitalocean", "-d", ""
+        "-o", "tester", "-v", "create", "server", "-t", "bare", "-sN", "barey", "-p", "aws"
       ],
       //"preLaunchTask": "Remove terry_testing files"
     },

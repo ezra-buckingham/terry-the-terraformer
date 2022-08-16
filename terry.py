@@ -238,6 +238,9 @@ def create(ctx_obj):
         else:
             LogHandler.warn('Continuing since "-f" / "--force" was supplied.')
     
+    # Parse the build manifest
+    parse_build_manifest()
+    
     # Load the public key so we can build the ssh key resources later
     public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
