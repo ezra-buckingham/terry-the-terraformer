@@ -28,6 +28,10 @@ class SlackHandler:
         if self.quiet_mode:
             LogHandler.debug('Skipping sending Slack Notification because quiet mode is on. SHHHHHHH!')
             return
+        if not self.webhook_url:
+            LogHandler.warn('No Slack Webhook URL provided, skipping sending webhook message.')
+            return
+        
         try:
             payload = payload.encode("utf-8")
             results = requests.post(self.webhook_url, payload)
