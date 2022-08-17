@@ -10,6 +10,10 @@
     apt:
       name: ufw
       state: present
+
+  - name: Extract the root_domain from the base domain
+    set_fact:
+      root_domain: "{{ domain.split('.')[ (domain.split('.') | length | int) - 2:] | join('.') }}"
   
   - name: Set the options for PostFix to install non-interactively
     shell: |
@@ -26,30 +30,10 @@
         - opendkim
         - opendkim-tools
 
-  - name: Allow PostFix to only listen on the localhost
-    ansible.builtin.replace:
-      path: '/etc/postfix/main.cf'
-      regexp: '^(inet_interfaces)(.*)$'
-      replace: 'inet_interfaces = loopback-only'
-
-  - name: Create a forwarding email alias for root
+  - name: Deploy the aliases configuration template
     ansible.builtin.copy:
+      src: '{{ playbook_dir }}/../templates/postfix/aliases.j2'
       dest: /etc/aliases
-      content: |
-        # /etc/aliases
-        mailer-daemon: postmaster
-        postmaster: root
-        nobody: root
-        hostmaster: root
-        usenet: root
-        news: root
-        webmaster: root
-        www: root
-        ftp: root
-        abuse: root
-        noc: root
-        security: root
-        root: {{ main_email }}
   
   - name: Allow for the Alias to take effect
     shell: |
@@ -76,46 +60,19 @@
   - name: Enforce firewall rules
     include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
 
-  - name: Edit PostFix configuration to use new SSL Certificate
-    ansible.builtin.replace:
-      path: '/etc/postfix/main.cf'
-      regexp: '^(smtpd_tls_cert_file)(.*)$'
-      replace: 'smtpd_tls_cert_file=/etc/letsencrypt/live/{{ domain }}/fullchain.pem'
-
-  - name: Edit PostFix configuration to use new SSL Certificate Key
-    ansible.builtin.replace:
-      path: '/etc/postfix/main.cf'
-      regexp: '^(smtpd_tls_key_file)(.*)$'
-      replace: 'smtpd_tls_key_file=/etc/letsencrypt/live/{{ domain }}/privkey.pem'
+  - name: Deploy the Postfix configuration template
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/postfix/main.cf.j2'
+      dest: '/etc/postfix/main.cf'
 
   - name: Allow the PostFix user access to the OpenDKIM group
     shell: |
       gpasswd -a postfix opendkim
 
-  - name: Change the Canonicalization configuration for OpenDKIM 
+  - name: Deploy the OpenDKIM configuration template
     ansible.builtin.replace:
-      path: /etc/opendkim.conf
-      regexp: '^(Canonicalization)(.*)$'
-      replace: 'Canonicalization   relaxed/simple'
-  
-  - name: Add additional configuration to OpenDKIM
-    ansible.builtin.replace:
-      path: /etc/opendkim.conf
-      regexp: '^(SubDomains)(.*)$'
-      replace: |
-        SubDomains		no
-        ######### TERRY BASE CONFIG #########
-        AutoRestart         yes
-        AutoRestartRate     10/1M
-        Background          yes
-        DNSTimeout          5
-        SignatureAlgorithm  rsa-sha256
-        KeyTable            refile:/etc/opendkim/key.table
-        SigningTable        refile:/etc/opendkim/signing.table
-        ExternalIgnoreList  /etc/opendkim/trusted.hosts
-        InternalHosts       /etc/opendkim/trusted.hosts
-        LogWhy              yes
-        ######### TERRY BASE CONFIG #########
+      src: '{{ playbook_dir }}/../templates/opendkim/opendkim.cf.j2'
+      dest: /etc/opendkim.conf
 
   - name: Create the OpenDKIM folder structure
     ansible.builtin.file:
@@ -125,42 +82,37 @@
     loop:
       - '/etc/opendkim'
       - '/etc/opendkim/keys'
-      - '/etc/opendkim/keys/{{ domain }}'
+      - '/etc/opendkim/keys/{{ root_domain }}'
 
-  - name: Create the base OpenDKIM signing table 
-    ansible.builtin.copy:
+  - name: Deploy the OpenDKIM signing table template
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/opendkim/signing.table.j2'
       dest: /etc/opendkim/signing.table
-      content: |
-        *@{{ domain }}    default._domainkey.{{ domain }}
 
-  - name: Create the base OpenDKIM key table 
-    ansible.builtin.copy:
-      dest: /etc/opendkim/signing.table
-      content: |
-        default._domainkey.{{ domain }}     {{ domain }}:default:/etc/opendkim/keys/{{ domain }}/default.private
+  - name: Deploy the OpenDKIM key table template
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/opendkim/key.table.j2'
+      dest: /etc/opendkim/key.table
 
   - name: Create the base OpenDKIM trusted hosts
-    ansible.builtin.copy:
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/opendkim/trusted.hosts.j2'
       dest: /etc/opendkim/trusted.hosts
-      content: |
-        127.0.0.1
-        localhost
-        *.{{ domain }}
 
   - name: Generate the DKIM Key Pair
     shell: |
-      opendkim-genkey -b 2048 -d {{ domain }} -D /etc/opendkim/keys/{{ domain }} -s default -v
+      opendkim-genkey -b 2048 -d {{ root_domain }} -D /etc/opendkim/keys/{{ root_domain }} -s default -v
 
   - name: Change ownership and permissions on the new key file
     ansible.builtin.file:
-      path: '/etc/opendkim/keys/{{ domain }}/default.private'
+      path: '/etc/opendkim/keys/{{ root_domain }}/default.private'
       owner: opendkim
       group: opendkim
       mode: '0600'
 
   - name: Copy the DKIM key back to the Terry host
     ansible.builtin.fetch:
-      src: "/etc/opendkim/keys/mx.focusfireandsecuity.net/default.txt"
+      src: "/etc/opendkim/keys/{{ root_domain }}/default.txt"
       dest: "{{ op_directory }}/ansible/extra_files/{{ uuid }}_dkim_default.txt"
       flat: true
     
@@ -171,29 +123,10 @@
       owner: opendkim
       group: postfix
 
-  - name: Change OpenDKIM socket creation path (master config)
+  - name: Deploy the OpenDKIM service configuration template
     ansible.builtin.replace: 
-      path: /etc/opendkim.conf
-      regexp: '^(Socket)(.*)$'
-      replace: "Socket    local:/var/spool/postfix/opendkim/opendkim.sock"
-
-  - name: Change OpenDKIM socket creation path (default config)
-    ansible.builtin.replace: 
-      path: /etc/default/opendkim
-      regexp: '^(SOCKET)(.*)$'
-      replace: "SOCKET=\"local:/var/spool/postfix/opendkim/opendkim.sock\""
-
-  - name: Allow PostFix to call OpenDKIM using the milter protocol
-    ansible.builtin.lineinfile:
-      path: /etc/postfix/main.cf
-      line: |
-        ######### TERRY MILTER CONFIG #########
-        milter_default_action = accept
-        milter_protocol = 6
-        smtpd_milters = local:opendkim/opendkim.sock
-        non_smtpd_milters = $smtpd_milters
-        ######### TERRY MILTER CONFIG #########
-      state: present
+      src: '{{ playbook_dir }}/../templates/opendkim/opendkim.j2'
+      dest: /etc/default/opendkim
   
   - name: Restart PostFix and OpenDKIM 
     shell: |

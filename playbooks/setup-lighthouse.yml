@@ -13,6 +13,11 @@
       path: /opt/logstash
       state: directory
 
+  - name: Create the Logstash runtime configuration directory
+    ansible.builtin.file:
+      path: /opt/logstash/logstash.d
+      state: directory
+
   - name: Deploy the Logstash service configuration
     ansible.builtin.template:
       src: '{{ playbook_dir }}/../templates/elastic/logstash/logstash.yml.j2'
@@ -20,12 +25,15 @@
       owner: logstash
       group: root
     
-  - name: Deploy the Logstash runtime configuration
+  - name: Deploy the Logstash runtime configurations
     ansible.builtin.template:
-      src: '{{ playbook_dir }}/../templates/elastic/logstash/logstash.conf.j2'
-      dest: /opt/logstash/logstash.conf
+      src: "{{ item }}"
+      dest: "/opt/logstash/{{ item | basename | regex_replace('\\.j2$', '') }}"
       owner: logstash
       group: root
+    with_fileglob:
+      - "{{ playbook_dir }}/../templates/elastic/logstash/logstash.d/*.j2"
+      - "{{ playbook_dir }}/../templates/elastic/logstash/logstash.d/*.conf"
 
   - name: Start the Logstash service
     shell: |

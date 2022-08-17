@@ -383,7 +383,7 @@ class Domain(TerraformObject):
 class Server(AnsibleControlledObject, TerraformObject):
     """Base class for representing servers"""
 
-    def __init__(self, name, provider, server_type, domain, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None):
+    def __init__(self, name, provider, server_type, domain, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None, dns_setup=None):
         self.resource_type = 'server'
         self.name = name
         self.server_type = server_type
@@ -396,6 +396,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         self.domain_to_impersonate = domain_to_impersonate
         self.redirector_type = redirector_type
         self.proxy_to = proxy_to
+        self.dns_setup = dns_setup
 
         # Init the Parents
         TerraformObject.__init__(self, provider, self.resource_type)   

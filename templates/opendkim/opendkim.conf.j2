@@ -1,0 +1,29 @@
+# /etc/opendkim/opendkim.conf
+
+# Logging Preferences
+Syslog              yes
+SyslogSuccess		yes
+Logwhy              yes
+
+# General Configuration
+Canonicalization    relaxed/simple
+Mode                sv
+SubDomains          no
+OversignHeaders		From
+UserID              opendkim
+AutoRestart         yes
+AutoRestartRate     10/1M
+Background          yes
+DNSTimeout          5
+SignatureAlgorithm  rsa-sha256
+KeyTable            refile:/etc/opendkim/key.table
+SigningTable        refile:/etc/opendkim/signing.table
+ExternalIgnoreList  /etc/opendkim/trusted.hosts
+InternalHosts       /etc/opendkim/trusted.hosts
+
+# Sockets for OpenDKIM
+Socket              local:/var/spool/postfix/opendkim/opendkim.sock
+PidFile             /run/opendkim/opendkim.pid
+
+# Stuff I have no idea about
+TrustAnchorFile		/usr/share/dns/root.key

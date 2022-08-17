@@ -18,8 +18,8 @@
     when: containers is defined
     block:
 
-    # - name: Install Docker on the host
-    #   include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
+    - name: Install Docker on the host
+      include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
 
     - name: Create directories for each containers for on the host
       ansible.builtin.file:
