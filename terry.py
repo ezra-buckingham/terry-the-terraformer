@@ -238,8 +238,8 @@ def create(ctx_obj):
         else:
             LogHandler.warn('Continuing since "-f" / "--force" was supplied.')
     
-    # Parse the build manifest
-    parse_build_manifest()
+    # Parse the build manifest, while ignoring resources if build has been forced
+    parse_build_manifest(force=ctx_obj['force'])
     
     # Load the public key so we can build the ssh key resources later
     public_key, private_key = get_operation_ssh_key_pair()
@@ -271,38 +271,16 @@ def build_infrastructure(ctx, resources):
     map_terraform_values_to_resources(results)
 
     # Configure Nebula
-    if not ctx.obj['no_nebula']:
-        LogHandler.info('Setting up Nebula configurations and certificates')
-        ctx.obj['nebula_handler'].generate_ca_certs()
-        for resource in [ server for server in  ctx.obj['resources'] if isinstance(server, Server) ]:
-            assigned_nebula_ip = ctx.obj['nebula_handler'].generate_client_cert(resource.uuid)
-            resource.nebula_ip = assigned_nebula_ip
-            if isinstance(resource, Lighthouse):
-                ctx.obj['lighthouse_public_ip'] = resource.public_ip
-                ctx.obj['lighthouse_nebula_ip'] = resource.nebula_ip
-    else:
-        LogHandler.info('Skipping setting up Nebula configurations and certificates')
+    configure_nebula()
 
+    # Create the build manifest and run ansible
     create_build_manifest()
     prepare_and_run_ansible()
     
     # Now we need to check for Mailservers, to see if additional DNS entries are required
-    mailservers = [ x for x in ctx.obj["resources"] if isinstance(x, Mailserver) ]
-    for mailserver in mailservers:
-        dkim_record = Path(ctx.obj['op_directory']).joinpath(f'ansible/extra_files/{ mailserver.uuid }_dkim_default.txt')
-        dkim_record.read_text()
+    prepare_mailservers()
         
-        # Parse the DKIM file
-        dkim_record = dkim_record.split('\t')
-        dkim_host = dkim_record[0]
-        dkim_value = re.sub('[()" ]', '', dkim_record[3])
-        dkim_value = dkim_value.replace('\n', '\\"\\"')
-        
-        # Run the add with the new DKIM
-        ctx.invoke
-        
-
-    LogHandler.info('Ansible setup complete')
+    # Holy shit, we are done! We made it this whole way without any critical errors, that is sick
     ctx.obj['end_time'] = get_formatted_time()
     ctx.obj['slack_handler'].send_success(ctx.obj)
 
@@ -412,11 +390,10 @@ def reconfigure(ctx_obj):
     Name of the server (used for creating corresponding DNS records if you use the "domain" command)
     ''')
 @click.option('--container', '-cT', type=str, multiple=True, help='''
-    Containers to install onto the server
+    Containers to install onto the server (must be defined in container_mappings.yml to be used)
     ''')
-@click.option('--redirector_type', '-rT', type=click.Choice(get_implemented_redirector_types()), help='''
-    Type redirector to build, with optional domain specified for that redirector formatted as "<provider>:<protocol>:<domain>:<registrar>" 
-    (Example: https redirector in AWS at domain example.com with registrar AWS should be "aws:https:example.com:aws)"
+@click.option('--redirector_type', '-rT', type=click.Choice(get_implemented_redirector_types()), help=f'''
+    Type redirector to build (options are {get_implemented_redirector_types()})
     ''')
 @click.option('--redirect_to', '-r2', type=str, help='''
     Domain to redirect to / impersonate (only deployed with categorize servers)
@@ -475,14 +452,15 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
         main_domain = domains.pop(0)
         base_domain = Domain.get_domain(main_domain[0])
         mx_domain_value = f'mx.{ main_domain[0] }'
-        spf_domain_value = 'v=spf1 mx ~all'
+        dmarc_domain = f'_dmarc.{ mx_domain_value }'
+        dmarc_value = 'v=DMARC1; p=none'
         server.domain = mx_domain_value
         
         ctx.obj['resources'].append(server)
         
         ctx.invoke(domain, provider=main_domain[1], domain=mx_domain_value, type='A', server_name=server.uuid)
         ctx.invoke(domain, provider=main_domain[1], domain=mx_domain_value, type='MX', value=f'10 { mx_domain_value }')
-        ctx.invoke(domain, provider=main_domain[1], domain=base_domain, type='TXT', value=spf_domain_value)
+        ctx.invoke(domain, provider=main_domain[1], domain=dmarc_domain, type='TXT', value=dmarc_value)
     elif type == 'redirector':
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
         # Check how many domains we have set

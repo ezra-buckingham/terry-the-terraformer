@@ -1,4 +1,5 @@
-from jinja2 import meta, Template, FileSystemLoader, Environment
+import jinja2
+
 
 class JinjaHandler:
     """
@@ -6,8 +7,15 @@ class JinjaHandler:
     """
 
     def __init__(self, search_path):
-        self.template_loader = FileSystemLoader(searchpath=search_path)
-        self.template_env = Environment(loader=self.template_loader)
+        self.template_loader = jinja2.FileSystemLoader(searchpath=search_path)
+        self.template_env = jinja2.Environment(loader=self.template_loader)
+        
+        self.template_env.filters.update({
+            'is_list': self.__is_list,
+        })
+        
+    def __is_list(value):
+        return isinstance(value, list)
 
     def get_template(self, template_path):
         """
@@ -20,7 +28,7 @@ class JinjaHandler:
         """
         """
 
-        if isinstance(template, Template):
+        if isinstance(template, jinja2.Template):
             return template.render(data, **kwargs)
         else:
             raise TypeError('Template provided not of type Template')
@@ -40,5 +48,5 @@ class JinjaHandler:
 
         template_source = self.template_env.loader.get_source(self.template_env, template)
         parsed_content = self.template_env.parse(template_source)
-        variables = meta.find_undeclared_variables(parsed_content)
+        variables = jinja2.meta.find_undeclared_variables(parsed_content)
         return variables

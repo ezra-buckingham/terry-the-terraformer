@@ -65,9 +65,9 @@
   - name: Enforce firewall rules
     include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
   
-  # - name: Request the SSL cert for the domain
-  #   shell: |
-  #     certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ domain }} 
+  - name: Request the SSL cert for the domain
+    shell: |
+      certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ domain }} 
 
   - name: Close the Firewall 
     shell: |
@@ -160,8 +160,9 @@
 
   - name: Copy the DKIM key back to the Terry host
     ansible.builtin.fetch:
-      src: /etc/opendkim/keys/mx.focusfireandsecuity.net/default.txt
+      src: "/etc/opendkim/keys/mx.focusfireandsecuity.net/default.txt"
       dest: "{{ op_directory }}/ansible/extra_files/{{ uuid }}_dkim_default.txt"
+      flat: true
     
   - name: Create the folder to hold the OpenDKIM socket 
     ansible.builtin.file:

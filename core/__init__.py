@@ -41,6 +41,68 @@ def check_for_operation_directory(ctx_obj):
         LogHandler.critical(f'No deployment found with the name "{ ctx_obj["operation"] }"')
 
 @click.pass_context
+def prepare_mailservers(ctx):
+    """_summary_
+
+    Args:
+        ctx (_type_): _description_
+    """
+    
+    from terry import domain, build_infrastructure
+    
+    mailservers_in_build = False
+    
+    for server in ctx.obj["resources"]:
+        
+        if not isinstance(server, Mailserver):
+            continue
+        
+        if server.dns_setup:
+            LogHandler.debug('Mailserver found, but DNS records already present for SMTP to work')
+            continue
+        
+        mailservers_in_build = True
+        LogHandler.info('Mailserver found, setting up DNS records for SMTP now')
+        
+        # Get the MX record for this mailserver from current build
+        server_root_domain = Domain.get_domain(server.domain)
+        corresponding_domain = [x for x in ctx.obj['resources'] if isinstance(x, Domain) and x.domain == server_root_domain][0]
+        domain_provider = corresponding_domain.provider
+        
+        # Get the DKIM Key
+        dkim_record_file = Path(ctx.obj['op_directory']).joinpath(f'ansible/extra_files/{ server.uuid }_dkim_default.txt')
+        dkim_record = dkim_record_file.read_text()
+                
+        # Parse the DKIM file
+        dkim_record_split = dkim_record.split('\t')
+        dkim_record = re.search(r'\(([^\)]+)\)', dkim_record).group(1)
+        dkim_record = list(map(lambda record: re.sub('[" \t\n]', '', record), dkim_record.split('\t')))
+        dkim_host_fqdn = f'{dkim_record_split[0]}.{server_root_domain}'
+        
+        # Build out the proper DKIM value that can be processed by terraform
+        dkim_value = '\x5C\x22\x5C\x22'.join(dkim_record)
+        
+        # Mark the server for having had DNS setup
+        server.dns_setup = True
+        
+        # Run the add with the new DKIM
+        ctx.invoke(domain, provider=domain_provider, domain=dkim_host_fqdn, type='TXT', value=dkim_value)    
+        
+        # Setup the SPF record with the IPv4
+        spf_domain_value = f'v=spf1 mx ip4:{ server.public_ip } ~all'
+        
+        ctx.invoke(domain, provider=domain_provider, domain=server.domain, type='TXT', value=spf_domain_value)
+        
+    # Build infra again in order to populate the new DNS entries 
+    if mailservers_in_build: 
+        # Ensure force flag is false so all build infra isn't fully replaced (new UUIDs / Names assigned)
+        ctx.obj['force'] = False
+        ctx.obj['auto_approve'] = True
+        
+        return build_infrastructure(None)
+    
+
+@click.pass_context
 def prepare_lighthouse(ctx):
     """Prepare the nebula handler object for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']
     This is split out as we may want not want to search for the Nebula Binary too early in a build as it might not be needed
@@ -111,6 +173,33 @@ def prepare_lighthouse(ctx):
         check_for_required_value('elastic_api_key')
     else:
         LogHandler.warn('This build has opted out of Elastic')
+        
+
+@click.pass_obj
+def configure_nebula(ctx_obj):
+    """_summary_
+
+    Args:
+        ctx_obj (_type_): _description_
+    """
+    
+    if ctx_obj['no_nebula']:
+        LogHandler.info('Nebula not configured for this build, skipping setting up Nebula configurations and certificates')
+        return
+    
+    
+    LogHandler.info('Setting up Nebula configurations and certificates')
+    ctx_obj['nebula_handler'].generate_ca_certs()
+    
+    for resource in [ server for server in  ctx_obj['resources'] if isinstance(server, Server) ]:
+        assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.uuid)
+        resource.nebula_ip = assigned_nebula_ip
+        
+        if isinstance(resource, Lighthouse):
+            ctx_obj['lighthouse_public_ip'] = resource.public_ip
+            ctx_obj['lighthouse_nebula_ip'] = resource.nebula_ip
+            
+    LogHandler.info('Nebula certificates created. Out of this world, huh?')
 
 
 @click.pass_context
@@ -132,8 +221,8 @@ def prepare_core_handlers(ctx):
     ctx.obj['slack_handler'] = SlackHandler(slack_webhook_url, ctx.obj['quiet'])
 
 
-@click.pass_obj
-def prepare_and_run_ansible(ctx_obj):
+@click.pass_context
+def prepare_and_run_ansible(ctx):
     """Prepare all the Ansible handler object and run all playbooks (handler will be given to the Click Context Object at `ctx.obj['ansible_handler']`)
 
     Args:
@@ -143,9 +232,9 @@ def prepare_and_run_ansible(ctx_obj):
     """
 
     # Create the Ansible Handler
-    ansible_path = ctx_obj['config_contents']['global']['ansible_path']
+    ansible_path = ctx.obj['config_contents']['global']['ansible_path']
     public_key, private_key = get_operation_ssh_key_pair()
-    ctx_obj['ansible_handler'] = AnsibleHandler(ansible_path, Path(ctx_obj['op_directory']).joinpath('ansible'), private_key)
+    ctx.obj['ansible_handler'] = AnsibleHandler(ansible_path, Path(ctx.obj['op_directory']).joinpath('ansible'), private_key)
     
     # Build the Ansible Inventory
     LogHandler.debug('Building Ansible inventory')  
@@ -153,16 +242,18 @@ def prepare_and_run_ansible(ctx_obj):
 
     # Run all the Prep playbooks
     root_playbook_location = '../../../playbooks'
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
+    if not ctx.command.name == 'create': ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
 
     # Run all the server-type specific playbooks
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-lighthouse.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
-    ctx_obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-lighthouse.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
+    
+    LogHandler.info('Ansible setup complete')
 
 
 @click.pass_obj
@@ -203,11 +294,11 @@ def read_build_manifest(ctx_obj):
 
 
 @click.pass_obj
-def parse_build_manifest(ctx_obj):
+def parse_build_manifest(ctx_obj, force=False):
     """Read the build manifest **and pass values into the Click Context**
 
     Args:
-        `None`
+        `force (bool)`: Force reading the manifest and ignore all resources in manifest
     Returns:
         `build_manifest (dict)`: The build manifest contents
     """
@@ -218,6 +309,9 @@ def parse_build_manifest(ctx_obj):
     build_manifest = read_build_manifest()
     ctx_obj['build_uuid'] = build_manifest['build_uuid']
     ctx_obj['operation'] = build_manifest['operation']
+    
+    # If we want to force replacement, return the build manifest without any additional config
+    if force: return build_manifest
     
     build_config = build_manifest['config']
     ctx_obj['no_nebula'] = build_config.get('no_nebula', True)
