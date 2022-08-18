@@ -4,8 +4,6 @@
   hosts: all
   vars_files:
     - '{{ playbook_dir }}/../configurations/container_mappings.yml'
-  vars:
-    jinja_unescape_paths: []
   tasks:
 
   - name: Verify UFW installed
@@ -51,17 +49,6 @@
             src: '{{ playbook_dir }}/../templates/docker/docker-compose.yml.j2'
             dest: '{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_docker-compose.yml'
 
-        - name: Append the new the docker-compose.yml file to the jinja_unescape_paths list for later processing
-          set_fact:
-            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_docker-compose.yml" ]'
-        
-        - name: Append all existing pre_run_commands and post_run_commands to the jinja_unescape_paths list for later processing
-          set_fact:
-            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml", "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml" ]'
-          loop: "{{ docker_services }}"
-          loop_control:
-            label: "{{ item.container_name }}"
-
         - name: Create the pre_run_commands task file on localhost
           ansible.builtin.copy:
             content: "{{ item.pre_run_commands | to_nice_yaml }}"
@@ -77,9 +64,6 @@
           loop: "{{ docker_services }}"
           loop_control:
             label: "{{ item.container_name }}"
-
-        - name: Unescape all Jinja from each file as defined in jinja_unescape_paths
-          include_tasks: '{{ playbook_dir }}/core/unescape-jinja.yml'
 
     - name: Setup source directories as defined in docker compose
       include_tasks: '{{ playbook_dir }}/core/setup-docker-source-directories.yml'  

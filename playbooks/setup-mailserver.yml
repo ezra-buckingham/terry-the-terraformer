@@ -39,26 +39,26 @@
     shell: |
       newaliases
 
-  - name: Install Certbot 
-    include_tasks: '{{ playbook_dir }}/install/install-certbot.yml'
+  # - name: Install Certbot 
+  #   include_tasks: '{{ playbook_dir }}/install/install-certbot.yml'
 
-  - name: Allow SSL verification in the Firewall
-    shell: |
-      ufw allow 80
+  # - name: Allow SSL verification in the Firewall
+  #   shell: |
+  #     ufw allow 80
       
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  # - name: Enforce firewall rules
+  #   include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
   
-  - name: Request the SSL cert for the domain
-    shell: |
-      certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ domain }} 
+  # - name: Request the SSL cert for the domain
+  #   shell: |
+  #     certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ domain }} 
 
-  - name: Close the Firewall 
-    shell: |
-      ufw deny 80
+  # - name: Close the Firewall 
+  #   shell: |
+  #     ufw deny 80
 
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  # - name: Enforce firewall rules
+  #   include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
 
   - name: Deploy the Postfix configuration template
     ansible.builtin.template:
@@ -70,8 +70,8 @@
       gpasswd -a postfix opendkim
 
   - name: Deploy the OpenDKIM configuration template
-    ansible.builtin.replace:
-      src: '{{ playbook_dir }}/../templates/opendkim/opendkim.cf.j2'
+    ansible.builtin.template:
+      src: '{{ playbook_dir }}/../templates/opendkim/opendkim.conf.j2'
       dest: /etc/opendkim.conf
 
   - name: Create the OpenDKIM folder structure
@@ -124,7 +124,7 @@
       group: postfix
 
   - name: Deploy the OpenDKIM service configuration template
-    ansible.builtin.replace: 
+    ansible.builtin.template: 
       src: '{{ playbook_dir }}/../templates/opendkim/opendkim.j2'
       dest: /etc/default/opendkim
   
@@ -132,6 +132,13 @@
     shell: |
       systemctl stop opendkim postfix
       systemctl enable opendkim postfix --now
+
+  - name: Make the Postfix group own the OpenDKIM socket
+    ansible.builtin.file:
+      path: /var/spool/postfix/opendkim/opendkim.sock
+      owner: opendkim
+      group: postfix
+      mode: '0070' 
 
   - name: Open all SMTP ports
     shell: |

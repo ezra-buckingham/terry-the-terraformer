@@ -1,3 +1,4 @@
+import json
 import random
 import re
 import click
@@ -39,6 +40,7 @@ def check_for_operation_directory(ctx_obj):
     # Check if the folder exists
     if not ctx_obj['op_directory'].exists():
         LogHandler.critical(f'No deployment found with the name "{ ctx_obj["operation"] }"')
+
 
 @click.pass_context
 def prepare_mailservers(ctx):
@@ -99,7 +101,18 @@ def prepare_mailservers(ctx):
         ctx.obj['force'] = False
         ctx.obj['auto_approve'] = True
         
-        return build_infrastructure(None)
+        # Create the terraform plan and build it 
+        plan = build_terraform_plan()
+        plan_file = Path(ctx.obj['op_directory']).joinpath(f'terraform/{ ctx.obj["operation"] }_plan.tf')
+        plan_file.write_text(plan)
+
+        # Apply the plan and map results back
+        ctx.obj['terraform_handler'].apply_plan(auto_approve=ctx.obj['auto_approve'])
+        return_code, stdout, stderr = ctx.obj['terraform_handler'].show_state(json=True)
+        results = json.loads(stdout)['values']['root_module']['resources']
+        map_terraform_values_to_resources(results)
+        
+        return 
     
 
 @click.pass_context
@@ -517,6 +530,8 @@ def build_terraform_plan(ctx_obj):
     Uses the utils.render_template function to render the Terraform plan based on
     provider and resource templates.
     """
+    
+    LogHandler.info('Building Terraform plan')
 
     plan = ''
     jinja_handler = JinjaHandler(".")
