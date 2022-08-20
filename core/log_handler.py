@@ -1,5 +1,5 @@
-import logging
 import click
+import logging
 
 logger = logging.getLogger()
 
@@ -85,7 +85,7 @@ class LogHandler:
         
         Args:
             `message (str)`: Message to log
-            `is_fatal (bool)`: Is the error fatal enough to exit (Default is `True`)
+            `is_fatal (bool)`: Is the error fatal enough to exit (default is `True`)
         Returns:
             `None`
         """
@@ -100,7 +100,7 @@ class LogHandler:
         
         Args:
             `message (str)`: Message to log
-            `is_fatal (bool)`: Is the error fatal enough to exit (Default is `True`)
+            `is_fatal (bool)`: Is the error fatal enough to exit (default is `True`)
         Returns:
             `None`
         """
