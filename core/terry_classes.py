@@ -10,7 +10,7 @@ from core.log_handler import LogHandler
 
 
 #################################################################################################################
-# Parent Terraform, Ansible, & Container Classes
+# Parent Terraform, Ansible, and Container Classes
 #################################################################################################################
 
 class TerraformObject:
@@ -72,7 +72,7 @@ class AnsibleControlledObject:
         Args:
             `None`
         Returns:
-            `self_dict (dict)`: The dictonary needed for the ansible playbooks for the child object
+            `self_dict (dict)`: The dictonary needed for the Ansible playbooks for the child object
         """
         self_dict = {
             **self.core_playbook_vars
@@ -89,7 +89,7 @@ class AnsibleControlledObject:
         if hasattr(self, 'name') and self.name is not None:
             self_dict['name'] = self.name
 
-        # Check for a nebula ip
+        # Check for a Nebula IP
         if hasattr(self, 'nebula_ip') and self.nebula_ip is not None:
             self_dict['nebula_ip'] = self.nebula_ip
 
@@ -122,7 +122,7 @@ class Container(AnsibleControlledObject):
         AnsibleControlledObject.__init__(self)
         
         self.name = name
-        # Default Values
+        # Default values
         self.required_args = required_args
         self.container_config = {}
 
@@ -134,7 +134,7 @@ class Container(AnsibleControlledObject):
         if not self.container_config:
             LogHandler.critical(f'Container Error ({self.name}): No container configutation found in container mappings YAML')
 
-        # Set the core ansible vars
+        # Set the core Ansible vars
         self.core_playbook_vars = {
             'name': self.name,
             **self.required_args
@@ -172,7 +172,7 @@ class Container(AnsibleControlledObject):
 
     @classmethod
     def get_container_mappings(self, simple_list=True):
-        """Get the Container Mapping configuration file that will be used to build and deploy docker containers
+        """Get the Container Mapping configuration file that will be used to build and deploy Docker containers
         
         Args: 
             `simple_list (boolean)`: (DEFAULT=True) Return just the list of containers in the config 
@@ -208,7 +208,7 @@ class Provider(TerraformObject):
         self.provider_config = parsed_yaml.get(self.name, None)
 
         if not self.provider_config:
-            LogHandler.critical(f'Provider Error ({self.name}): No provider configutation found in terraform mappings YAML')
+            LogHandler.critical(f'Provider Error ({self.name}): No provider configutation found in Terraform mappings YAML')
         
         # Set the source and version
         self.source = self.provider_config['provider'].get('source', source)
@@ -239,7 +239,7 @@ class Provider(TerraformObject):
 
 
 class SSHKey(TerraformObject):
-    """Base class for representing an ssh key"""
+    """Base class for representing an SSH key"""
 
 
     def __init__(self, provider, name, public_key=None, private_key=None):
@@ -574,7 +574,7 @@ class Teamserver(Server):
 
 
 class Categorize(Server):
-    """Class for Categorization servers, infrastructure that allows us to have c2 domains"""
+    """Class for Categorization servers, infrastructure that allows us to have C2 domains"""
 
     def __init__(self, name, provider, domain, domain_to_impersonate):
 
