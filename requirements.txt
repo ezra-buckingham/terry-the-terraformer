@@ -1,8 +1,8 @@
-click
-python-terraform
+ansible
 ansible-runner
 boto3
+click
 jinja2
+python-terraform
 requests
 uuid
-ansible
