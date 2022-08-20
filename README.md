@@ -9,7 +9,7 @@ A Python CLI tool for building a red team infrastructure using Terraform, Ansibl
 
 ## Documentation
 
-Most documentation can be found in the [Wiki pages](https://github.com/ezra-buckingham/terry-the-terraformer/wiki). If there is something missing or unclear, please create GitHub issue.
+Most documentation can be found in the [Wiki pages](https://github.com/ezra-buckingham/terry-the-terraformer/wiki). If there is something missing or unclear, please create a GitHub issue.
 
 ## Getting Started
 
@@ -28,7 +28,7 @@ Terry contains a few known issues. Below are some of the ones I have identified:
   * DigitalOcean will create PTR records from the name of the host, need to make sure name of host is the FQDN
 * No way for end users to modify the templates without being overwritten (may need to add to Terraform config so users can manage things like default security groups)
 
-## What's next?
+## What's Next?
 
 * Adding a secrets management solution to Terry to allow for dynamic generation of secrets and automatic pushing of secrets to a secure place
 * Timeout date on infra (auto-destroy)
