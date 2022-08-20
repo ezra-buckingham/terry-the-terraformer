@@ -1,13 +1,13 @@
 
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import uuid
 import yaml
+from dataclasses import dataclass
+from pathlib import Path
 
+from core.binary_handler import BinaryHandler
 from core.log_handler import LogHandler
 from core.shell_handler import ShellHandler
-from core.binary_handler import BinaryHandler
 
 
 @dataclass
@@ -41,7 +41,7 @@ class RemoteConfigurationHandler:
             self.__clone_repo()
             LogHandler.debug(f'Clone of "{self.repository_url}" successfully written to "{self.repo_folder_on_disk}"')
         except Exception as e:
-            message = f'{base_message} There was an error cloning "{self.repository_url}" using provided credentials. Please make sure you have the right URL and credentials.'
+            message = f'{base_message} There was an error cloning "{self.repository_url}" using the provided credentials. Please make sure you have the right URL and credentials.'
             LogHandler.error(message) 
 
         # Now let's loop over what we got back from the remote
