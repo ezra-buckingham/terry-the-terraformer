@@ -1,3 +1,4 @@
+ansible
 ansible-core
 ansible-runner
 boto3

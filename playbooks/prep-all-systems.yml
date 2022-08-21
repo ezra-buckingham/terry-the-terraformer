@@ -32,7 +32,7 @@
       label: "{{ item.value.user }}"
   
   - name: Add SSH Keys
-    authorized_key:
+    ansible.posix.authorized_key:
       user: "{{ item.value.user }}"
       state: present
       key: "{{ item.value.public_key }}"

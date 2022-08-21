@@ -1,3 +1,38 @@
+# Get the default vpc for the {{ uuid }} server
+resource "aws_default_vpc" "vpc-{{ uuid }}" {
+  tags = {
+    Name = "Default VPC"
+  }
+}
+
+# Create the security group for the {{ uuid }} server
+resource "aws_security_group" "sec-group-{{ uuid }}" {
+  name = "sec-group-{{ uuid }}"
+  description = "Allow all for host-based firewall"
+  vpc_id = aws_default_vpc.vpc-{{ uuid }}.id
+
+  ingress {
+    description = "SSH all"
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "sec-group-{{ uuid }}"
+  }
+}
+
 # Get the AMI for Debian Buster
 data "aws_ami" "ami-{{ uuid }}" { # Value provided by Jinja
   most_recent = true
@@ -17,6 +52,7 @@ resource "aws_instance" "{{ uuid }}" { # Value Provided by Jinja
   ami = data.aws_ami.ami-{{ uuid }}.id  # Value Provided by Jinja
   instance_type = "{{ terraform_size_reference }}"
   key_name = "{{ provider }}-{{ build_uuid }}"  # Value provided by Jinja
+  vpc_security_group_ids = [ aws_security_group.sec-group-{{ uuid }}.id ]
 
   root_block_device {
     delete_on_termination = true
