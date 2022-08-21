@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 
+import click
 import json
 import logging
 import os
 import re
 import sys
-import click
 import yaml
 from pathlib import Path
 
@@ -30,7 +30,7 @@ from core import *
     Force the build to go through, even if a deployment already exists with the opration name listed
     ''')
 @click.option('-q', '--quiet', is_flag=True, default=False, help='''
-    Don\'t send Slack messages to configuration-defined webhook url upon infrastructure creation
+    Don\'t send Slack messages to configuration-defined webhook URL upon infrastructure creation
     ''')
 @click.option('-v', '--verbose', is_flag=True, default=False, help='''
     Verbose output from Terry (does not change what is logged in the log file)
@@ -39,13 +39,13 @@ from core import *
     Location to write log file to
     ''')
 @click.option('-N', '--no_nebula', is_flag=True, default=False, help='''
-    Skip setting up Nebula as a mesh vpn overlay on deployed resources
+    Skip setting up Nebula as a mesh VPN overlay on deployed resources
     ''')   
 @click.option('-Ne', '--no_elastic', is_flag=True, default=False, help='''
     Skip setting up Logstash / Filebeats for deployed resources
     ''')  
 @click.option('-cR', '--container_registry', help='''
-    Container registry to use for deploying containers (The URL for the registry)
+    Container registry to use for deploying containers (the URL for the registry)
     ''')
 @click.option('-cRU', '--container_registry_username', help='''
     Username used to authenticate to the container registry (required if deploying containers)
@@ -54,7 +54,7 @@ from core import *
     Password used to authenticate to the container registry (required if deploying containers)
     ''')
 @click.option('-eS', '--elastic_server', help='''
-    Elasticsearch public ip address or FQDN (for centralized logging) and port
+    Elasticsearch public IP address or FQDN (for centralized logging) and port
     ''')
 @click.option('-eK', '--elastic_api_key', help='''
     API Key used to authenticate to the Elasticsearch server / cluster
@@ -69,7 +69,7 @@ from core import *
     AWS region
     ''')
 @click.option('-doT', '--digital_ocean_token', help='''
-    Token for Digital Ocean API
+    Token for DigitalOcean API
     ''')
 @click.option('-ncU', '--namecheap_user_name', help='''
     Namecheap username for Namecheap API
@@ -90,7 +90,7 @@ from core import *
     Password to use when connecting to teamserver
     ''')
 @click.option('-csMC2', '--cobaltstrike_malleable_c2', type=click.Path(exists=True), help='''
-    Path to malleable C2 profile to use when starting CobaltStrike
+    Path to Malleable C2 profile to use when starting Cobalt Strike
     ''')
 @click.pass_context
 def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, no_nebula, no_elastic,
@@ -101,7 +101,7 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     namecheap_user_name, namecheap_api_user, namecheap_api_key,
     godaddy_api_key, godaddy_api_secret,
     cobaltstrike_password, cobaltstrike_malleable_c2):
-    """Terry will help you with all of your red team infrastructure needs! He's not magic... he's Terry!"""
+    """Terry will help you with all of your Red Team infrastructure needs! He's not magic... he's Terry!"""
 
     # Configure logging and intial logging and time stamping
     logging.basicConfig(filename=log_file, filemode='a+', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
@@ -209,15 +209,15 @@ def create(ctx_obj):
         LogHandler.warn('Certificates directory not found in project directory, creating that now...')
         certificates_directory.mkdir(parents=True)
 
-    # If the operation directory doesn't exist, create the skeleton for it as well as all other resources required
+    # If the operation directory does not exist, create the skeleton for it as well as all other resources required
     if not Path(ctx_obj['op_directory']).exists():
-        LogHandler.info('Building operation directory structure, ssh keys, and remote configuration (if applicable)')
+        LogHandler.info('Building operation directory structure, SSH keys, and remote configuration (if applicable)')
         Path(ctx_obj['op_directory']).mkdir()
         # Does not account for situations where op_directory exists but these children do not
         for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'ansible/extra_tasks', 'ansible/extra_files', 'nebula/']:
             Path(ctx_obj['op_directory']).joinpath(path).mkdir(parents=True)
 
-        # Generate the SSH Keys and write them to disk
+        # Generate the SSH keys and write them to disk
         public_key, private_key = generate_ssh_key()
         key_file = Path(ctx_obj['op_directory']).joinpath(f'{operation_name}_key')
         pub_key_file = Path(ctx_obj['op_directory']).joinpath(f'{operation_name}_key.pub')
@@ -241,7 +241,7 @@ def create(ctx_obj):
     # Parse the build manifest, while ignoring resources if build has been forced
     parse_build_manifest(force=ctx_obj['force'])
     
-    # Load the public key so we can build the ssh key resources later
+    # Load the public key so we can build the SSH key resources later
     public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
     
@@ -272,7 +272,7 @@ def build_infrastructure(ctx, resources):
     # Configure Nebula
     configure_nebula()
 
-    # Create the build manifest and run ansible
+    # Create the build manifest and run Ansible
     create_build_manifest()
     prepare_and_run_ansible()
     
@@ -302,7 +302,7 @@ def add(ctx_obj):
     # Prepare the core handlers
     prepare_core_handlers()
 
-    # Load the public key so we can build the ssh key resources later
+    # Load the public key so we can build the SSH key resources later
     public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
     
@@ -413,9 +413,9 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
         
     ctx.obj['existing_server_names'].add(name)
         
-    # Check if we have an SSH Key for that provider provisioned
+    # Check if we have an SSH key for that provider provisioned
     if provider not in ctx.obj['required_ssh_keys']:
-        LogHandler.debug(f'No SSH Key not found for "{ provider }", I will add one to the build for you')
+        LogHandler.debug(f'No SSH key not found for "{ provider }", I will add one to the build for you')
         ssh_key_name = f'{ ctx.obj["operation"] }_{ provider }_key'
         ssh_key = SSHKey(provider, ssh_key_name, ctx.obj['ssh_pub_key'])
         ctx.obj['required_ssh_keys'].add(provider)
@@ -497,7 +497,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
     The type of record to create
     ''')
 @click.option('--value', '-v', required=False, type=str, help='''
-    Value of the record (use this if you have a STATIC DNS record that doesn't depend on dynamic data returned from Terraform)
+    Value of the record (use this if you have a STATIC DNS record that does not depend on dynamic data returned from Terraform)
     ''')
 @click.option('--server_name', '-sN', required=False, type=str, help='''
     Name / UUID of the server resource whose public IP that you want to populate the value of the record (a resource with this name / uuid must exist in the build)
@@ -506,7 +506,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
 def domain(ctx_obj, provider, domain, type, value, server_name):
     """Create a domain resource"""
 
-    # Build a domain object so it get's parsed properly
+    # Build a domain object so it gets parsed properly
     domain_obj = Domain(domain, provider)
 
     # Check if we have this domain already
@@ -525,7 +525,7 @@ def domain(ctx_obj, provider, domain, type, value, server_name):
     elif value and server_name:
         LogHandler.critical(f'Domain expects to have either "-v" / "--value" OR "-sN" / "--server_name" to be set. Make sure one or the other is set when building a domain')
     else:
-        # Wrap the value in double quotes (if it is not a dynamic terraform reference, it should be represented as a string in the plan)
+        # Wrap the value in double quotes (if it is not a dynamic Terraform reference, it should be represented as a string in the plan)
         value = f'"{ value }"'
 
     # Add the domain record to the domain object
