@@ -257,12 +257,11 @@ def build_infrastructure(ctx, resources):
     LogHandler.debug('Build looks good! Terry, take it away!')
 
     # Create the Terraform plan and build it 
-    LogHandler.info('Building Terraform plan')
     plan = build_terraform_plan()
     plan_file = Path(ctx.obj['op_directory']).joinpath(f'terraform/{ ctx.obj["operation"] }_plan.tf')
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
-
+    
     # Apply the plan and map results back
     ctx.obj['terraform_handler'].apply_plan(auto_approve=ctx.obj['auto_approve'])
     LogHandler.info('Terraform apply successful!')
