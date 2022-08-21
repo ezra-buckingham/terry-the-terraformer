@@ -654,7 +654,7 @@ def generate_random_name():
         `random_name (str)`: A random name consisting of `<word1>-<word2>`
     """
 
-    word_file = Path("/usr/share/dict/words")
+    word_file = Path("core/static/words")
     words = word_file.read_text().splitlines()
 
     def __get_random_word():

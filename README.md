@@ -27,6 +27,7 @@ Terry contains a few known issues. Below are some of the ones I have identified:
 * PTR records need to be determined before SMTP will work
   * DigitalOcean will create PTR records from the name of the host, need to make sure name of host is the FQDN
 * No way for end users to modify the templates without being overwritten (may need to add to Terraform config so users can manage things like default security groups)
+* Implement a more standard way to generate random words as `/usr/share/dict/words` doesn't exist on all OS'es
 
 ## What's Next?
 
