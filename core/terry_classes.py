@@ -312,6 +312,7 @@ class Domain(TerraformObject):
         self_dict = {
             'domain': self.domain,
             'provider': self.provider,
+            'uuid': self.uuid,
             'domain_records': [ record.to_dict() for record in self.domain_records ]
         }
 
@@ -335,7 +336,7 @@ class Domain(TerraformObject):
         split_domain = fqdn.split('.')
         split_domain = split_domain[0:len(split_domain) - 2]
 
-        subdomain = ''.join(split_domain)
+        subdomain = '.'.join(split_domain)
 
         return subdomain
         
@@ -343,6 +344,7 @@ class Domain(TerraformObject):
     @classmethod
     def from_dict(self, dict):
         domain = Domain(dict['domain'], dict['provider'])
+        domain.uuid = dict.get('uuid', domain.uuid)
 
         for record in dict['domain_records']:
             domain.add_record(record['subdomain'], record['record_type'], record['value'])
@@ -381,7 +383,7 @@ class Domain(TerraformObject):
 class Server(AnsibleControlledObject, TerraformObject):
     """Base class for representing servers"""
 
-    def __init__(self, name, provider, server_type, domain, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None):
+    def __init__(self, name, provider, server_type, domain, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None, dns_setup=None):
         self.resource_type = 'server'
         self.name = name
         self.server_type = server_type
@@ -394,6 +396,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         self.domain_to_impersonate = domain_to_impersonate
         self.redirector_type = redirector_type
         self.proxy_to = proxy_to
+        self.dns_setup = dns_setup
 
         # Init the Parents
         TerraformObject.__init__(self, provider, self.resource_type)   
@@ -487,6 +490,9 @@ class Server(AnsibleControlledObject, TerraformObject):
 
         if self.proxy_to:
             self_dict['proxy_to'] = self.redirector_type
+            
+        if self.dns_setup:
+            self_dict['dns_setup'] = self.dns_setup
 
         return self_dict
 
@@ -506,6 +512,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         nebula_ip = dict.get('nebula_ip')
         redirector_type = dict.get('redirector_type')
         redirect_to = dict.get('redirect_to')
+        dns_setup = dict.get('dns_setup')
         domain_to_impersonate = dict.get('domain_to_impersonate')
         dict_containers = dict.get('containers', [])
 
@@ -526,7 +533,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         elif type == 'lighthouse':
             server = Lighthouse(name, provider, domain)
         elif type == 'mailserver':
-            server = Mailserver(name, provider, domain, containers)
+            server = Mailserver(name, provider, domain, containers, '', dns_setup)
         
         server.uuid = uuid
         server.public_ip = public_ip
@@ -557,8 +564,9 @@ class Lighthouse(Server):
 class Mailserver(Server):
     """Class for representing a mailserver"""
 
-    def __init__(self, name, provider, domain, containers=[], mailserver_type=''):
+    def __init__(self, name, provider, domain, containers=[], mailserver_type='', dns_setup=False):
         self.containers = containers + [ mailserver_type ]
+        self.dns_setup = dns_setup
 
         Server.__init__(self, name, provider, 'mailserver', domain, containers)
 
