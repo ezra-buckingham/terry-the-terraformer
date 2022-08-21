@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 
-import click
 import json
 import logging
 import os
 import re
 import sys
+import click
 import yaml
 from pathlib import Path
 
@@ -30,7 +30,7 @@ from core import *
     Force the build to go through, even if a deployment already exists with the opration name listed
     ''')
 @click.option('-q', '--quiet', is_flag=True, default=False, help='''
-    Don\'t send Slack messages to configuration-defined webhook URL upon infrastructure creation
+    Don\'t send Slack messages to configuration-defined webhook url upon infrastructure creation
     ''')
 @click.option('-v', '--verbose', is_flag=True, default=False, help='''
     Verbose output from Terry (does not change what is logged in the log file)
@@ -39,13 +39,13 @@ from core import *
     Location to write log file to
     ''')
 @click.option('-N', '--no_nebula', is_flag=True, default=False, help='''
-    Skip setting up Nebula as a mesh VPN overlay on deployed resources
+    Skip setting up Nebula as a mesh vpn overlay on deployed resources
     ''')   
 @click.option('-Ne', '--no_elastic', is_flag=True, default=False, help='''
     Skip setting up Logstash / Filebeats for deployed resources
     ''')  
 @click.option('-cR', '--container_registry', help='''
-    Container registry to use for deploying containers (the URL for the registry)
+    Container registry to use for deploying containers (The URL for the registry)
     ''')
 @click.option('-cRU', '--container_registry_username', help='''
     Username used to authenticate to the container registry (required if deploying containers)
@@ -54,7 +54,7 @@ from core import *
     Password used to authenticate to the container registry (required if deploying containers)
     ''')
 @click.option('-eS', '--elastic_server', help='''
-    Elasticsearch public IP address or FQDN (for centralized logging) and port
+    Elasticsearch public ip address or FQDN (for centralized logging) and port
     ''')
 @click.option('-eK', '--elastic_api_key', help='''
     API Key used to authenticate to the Elasticsearch server / cluster
@@ -69,13 +69,13 @@ from core import *
     AWS region
     ''')
 @click.option('-doT', '--digital_ocean_token', help='''
-    Token for DigitalOcean API
+    Token for Digital Ocean API
     ''')
 @click.option('-ncU', '--namecheap_user_name', help='''
     Namecheap username for Namecheap API
     ''')
 @click.option('-ncA', '--namecheap_api_user', help='''
-    Namecheap API username for Namecheap API (usually the same as username)
+    Namecheap API username for Namecheap API (Usually the same as username)
     ''')
 @click.option('-ncK', '--namecheap_api_key', help='''
     Namecheap API Key for Namecheap API
@@ -90,7 +90,7 @@ from core import *
     Password to use when connecting to teamserver
     ''')
 @click.option('-csMC2', '--cobaltstrike_malleable_c2', type=click.Path(exists=True), help='''
-    Path to Malleable C2 profile to use when starting Cobalt Strike
+    Path to malleable C2 profile to use when starting CobaltStrike
     ''')
 @click.pass_context
 def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, no_nebula, no_elastic,
@@ -217,7 +217,7 @@ def create(ctx_obj):
         for path in ['.terry', 'terraform/', 'ansible/inventory/', 'ansible/extra_vars', 'ansible/extra_tasks', 'ansible/extra_files', 'nebula/']:
             Path(ctx_obj['op_directory']).joinpath(path).mkdir(parents=True)
 
-        # Generate the SSH keys and write them to disk
+        # Generate the SSH Keys and write them to disk
         public_key, private_key = generate_ssh_key()
         key_file = Path(ctx_obj['op_directory']).joinpath(f'{operation_name}_key')
         pub_key_file = Path(ctx_obj['op_directory']).joinpath(f'{operation_name}_key.pub')
@@ -238,10 +238,10 @@ def create(ctx_obj):
         else:
             LogHandler.warn('Continuing since "-f" / "--force" was supplied.')
     
-    # Parse the build manifest
-    parse_build_manifest()
+    # Parse the build manifest, while ignoring resources if build has been forced
+    parse_build_manifest(force=ctx_obj['force'])
     
-    # Load the public key so we can build the SSH key resources later
+    # Load the public key so we can build the ssh key resources later
     public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
     
@@ -261,7 +261,7 @@ def build_infrastructure(ctx, resources):
     plan_file = Path(ctx.obj['op_directory']).joinpath(f'terraform/{ ctx.obj["operation"] }_plan.tf')
     LogHandler.debug('Writing Terrafom plan to disk')
     plan_file.write_text(plan)
-    
+
     # Apply the plan and map results back
     ctx.obj['terraform_handler'].apply_plan(auto_approve=ctx.obj['auto_approve'])
     LogHandler.info('Terraform apply successful!')
@@ -270,38 +270,16 @@ def build_infrastructure(ctx, resources):
     map_terraform_values_to_resources(results)
 
     # Configure Nebula
-    if not ctx.obj['no_nebula']:
-        LogHandler.info('Setting up Nebula configurations and certificates')
-        ctx.obj['nebula_handler'].generate_ca_certs()
-        for resource in [ server for server in  ctx.obj['resources'] if isinstance(server, Server) ]:
-            assigned_nebula_ip = ctx.obj['nebula_handler'].generate_client_cert(resource.uuid)
-            resource.nebula_ip = assigned_nebula_ip
-            if isinstance(resource, Lighthouse):
-                ctx.obj['lighthouse_public_ip'] = resource.public_ip
-                ctx.obj['lighthouse_nebula_ip'] = resource.nebula_ip
-    else:
-        LogHandler.info('Skipping setting up Nebula configurations and certificates')
+    configure_nebula()
 
+    # Create the build manifest and run ansible
     create_build_manifest()
     prepare_and_run_ansible()
     
     # Now we need to check for Mailservers, to see if additional DNS entries are required
-    mailservers = [ x for x in ctx.obj["resources"] if isinstance(x, Mailserver) ]
-    for mailserver in mailservers:
-        dkim_record = Path(ctx.obj['op_directory']).joinpath(f'ansible/extra_files/{ mailserver.uuid }_dkim_default.txt')
-        dkim_record.read_text()
+    prepare_mailservers()
         
-        # Parse the DKIM file
-        dkim_record = dkim_record.split('\t')
-        dkim_host = dkim_record[0]
-        dkim_value = re.sub('[()" ]', '', dkim_record[3])
-        dkim_value = dkim_value.replace('\n', '\\"\\"')
-        
-        # Run the add with the new DKIM
-        ctx.invoke
-        
-
-    LogHandler.info('Ansible setup complete')
+    # Holy shit, we are done! We made it this whole way without any critical errors, that is sick
     ctx.obj['end_time'] = get_formatted_time()
     ctx.obj['slack_handler'].send_success(ctx.obj)
 
@@ -324,7 +302,7 @@ def add(ctx_obj):
     # Prepare the core handlers
     prepare_core_handlers()
 
-    # Load the public key so we can build the SSH key resources later
+    # Load the public key so we can build the ssh key resources later
     public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
     
@@ -411,11 +389,10 @@ def reconfigure(ctx_obj):
     Name of the server (used for creating corresponding DNS records if you use the "domain" command)
     ''')
 @click.option('--container', '-cT', type=str, multiple=True, help='''
-    Containers to install onto the server
+    Containers to install onto the server (must be defined in container_mappings.yml to be used)
     ''')
-@click.option('--redirector_type', '-rT', type=click.Choice(get_implemented_redirector_types()), help='''
-    Type of redirector to build, with optional domain specified for that redirector formatted as "<provider>:<protocol>:<domain>:<registrar>" 
-    (Example: https redirector in AWS at domain example.com with registrar AWS should be "aws:https:example.com:aws)"
+@click.option('--redirector_type', '-rT', type=click.Choice(get_implemented_redirector_types()), help=f'''
+    Type redirector to build (options are {get_implemented_redirector_types()})
     ''')
 @click.option('--redirect_to', '-r2', type=str, help='''
     Domain to redirect to / impersonate (only deployed with categorize servers)
@@ -436,9 +413,9 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
         
     ctx.obj['existing_server_names'].add(name)
         
-    # Check if we have an SSH key for that provider provisioned
+    # Check if we have an SSH Key for that provider provisioned
     if provider not in ctx.obj['required_ssh_keys']:
-        LogHandler.debug(f'No SSH key not found for "{ provider }", I will add one to the build for you')
+        LogHandler.debug(f'No SSH Key not found for "{ provider }", I will add one to the build for you')
         ssh_key_name = f'{ ctx.obj["operation"] }_{ provider }_key'
         ssh_key = SSHKey(provider, ssh_key_name, ctx.obj['ssh_pub_key'])
         ctx.obj['required_ssh_keys'].add(provider)
@@ -474,14 +451,15 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
         main_domain = domains.pop(0)
         base_domain = Domain.get_domain(main_domain[0])
         mx_domain_value = f'mx.{ main_domain[0] }'
-        spf_domain_value = 'v=spf1 mx ~all'
+        dmarc_domain = f'_dmarc.{ mx_domain_value }'
+        dmarc_value = 'v=DMARC1; p=none'
         server.domain = mx_domain_value
         
         ctx.obj['resources'].append(server)
         
         ctx.invoke(domain, provider=main_domain[1], domain=mx_domain_value, type='A', server_name=server.uuid)
         ctx.invoke(domain, provider=main_domain[1], domain=mx_domain_value, type='MX', value=f'10 { mx_domain_value }')
-        ctx.invoke(domain, provider=main_domain[1], domain=base_domain, type='TXT', value=spf_domain_value)
+        ctx.invoke(domain, provider=main_domain[1], domain=dmarc_domain, type='TXT', value=dmarc_value)
     elif type == 'redirector':
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
         # Check how many domains we have set
@@ -495,7 +473,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
             server.domain = ns_domain_value
             ctx.obj['resources'].append(server)
 
-            # Build the domain objects
+            # Build the Domain objects
             ctx.invoke(domain, provider=main_domain[1], domain=main_domain[0], type='NS', value=ns_domain_value)
             ctx.invoke(domain, provider=main_domain[1], domain=ns_domain_value, type='A', server_name=server.uuid)
         else:
@@ -513,13 +491,13 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
     The cloud/infrastructure provider to use when creating the server
     ''')
 @click.option('--domain', '-d', required=True, type=str, help='''
-    FQDN to use in creation of a record type "<type>" (if no subdomain provided, the root will be used)
+    FQDN to use in creation of an record type "<type>" (if no subdomain provided, the root will be used)
     ''')
 @click.option('--type', '-t', type=str, default='A', help='''
     The type of record to create
     ''')
 @click.option('--value', '-v', required=False, type=str, help='''
-    Value of the record (use this if you have a STATIC DNS record that does not depend on dynamic data returned from Terraform)
+    Value of the record (use this if you have a STATIC DNS record that doesn't depend on dynamic data returned from Terraform)
     ''')
 @click.option('--server_name', '-sN', required=False, type=str, help='''
     Name / UUID of the server resource whose public IP that you want to populate the value of the record (a resource with this name / uuid must exist in the build)
@@ -528,7 +506,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
 def domain(ctx_obj, provider, domain, type, value, server_name):
     """Create a domain resource"""
 
-    # Build a domain object so it gets parsed properly
+    # Build a domain object so it get's parsed properly
     domain_obj = Domain(domain, provider)
 
     # Check if we have this domain already
@@ -547,7 +525,7 @@ def domain(ctx_obj, provider, domain, type, value, server_name):
     elif value and server_name:
         LogHandler.critical(f'Domain expects to have either "-v" / "--value" OR "-sN" / "--server_name" to be set. Make sure one or the other is set when building a domain')
     else:
-        # Wrap the value in double quotes (if it is not a dynamic Terraform reference, it should be represented as a string in the plan)
+        # Wrap the value in double quotes (if it is not a dynamic terraform reference, it should be represented as a string in the plan)
         value = f'"{ value }"'
 
     # Add the domain record to the domain object
