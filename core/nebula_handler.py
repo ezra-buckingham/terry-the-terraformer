@@ -22,7 +22,7 @@ class NebulaHandler:
 
     def __get_new_ip(self):
         for address in self.nebula_subnet:
-            # If any of the bits not set, don't use it
+            # If any of the bits not set, do not use it
             if len([add for add in str(address).split('.') if add == '0']) > 0:
                 self.__assigned_ips.add(address)
             # If the address not in assinged IP space, give it out
@@ -70,7 +70,7 @@ class NebulaHandler:
         try:
             ShellHandler.run(generate_command, str(self.working_dir))
         except CalledProcessError as e:
-            LogHandler.error('There was an error generating the Nebula Client Certificate and Key:')
+            LogHandler.error('There was an error generating the Nebula client certificate and key:')
             LogHandler.error(f'Nebula Error: { e.stderr.decode("utf-8") }')
             raise e
 

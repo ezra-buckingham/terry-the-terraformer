@@ -1,5 +1,5 @@
-from shutil import which
 from pathlib import Path
+from shutil import which
 
 from core.log_handler import LogHandler
 
@@ -11,7 +11,7 @@ class BinaryHandler:
         self.name = name
         self.path = path
 
-        # Check if a path was given in config and if it doesn't exist
+        # Check if a path was given in config and if it does not exist
         if self.path and Path(self.path).exists():
             LogHandler.debug(f'Found the "{self.name}" binary, from provided path')
         # If not, check to see if it is in the PATH

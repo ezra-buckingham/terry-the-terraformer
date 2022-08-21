@@ -1,7 +1,7 @@
+import click
 import json
 import random
 import re
-import click
 import yaml
 
 from pathlib import Path
@@ -117,7 +117,7 @@ def prepare_mailservers(ctx):
 
 @click.pass_context
 def prepare_lighthouse(ctx):
-    """Prepare the nebula handler object for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']
+    """Prepare the Nebula handler object for the build (all handlers will be given to the Click Context Object at `ctx.obj['<software>_handler']
     This is split out as we may want not want to search for the Nebula Binary too early in a build as it might not be needed
 
     Args:
