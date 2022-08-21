@@ -20,5 +20,5 @@ class BinaryHandler:
         else:
             LogHandler.critical(f'Binary Error ({self.name}): unable to find "{self.name}" binary in your path or using path provided in the config file')
 
-        # If we make it here, we were successfull in finding the binary
-        LogHandler.debug(f'Succesfully found "{self.name}" binary')
+        # If we make it here, we were successful in finding the binary
+        LogHandler.debug(f'Successfully found "{self.name}" binary')
