@@ -1,7 +1,9 @@
 
-- name: Restart the UFW Service
-  shell: |
-    systemctl restart ufw
+- name: Enable and start UFW
+  ansible.builtin.service:
+    name: ufw
+    enabled: true
+    state: restarted
 
 - name: Enable the new firewall rules
   shell: |

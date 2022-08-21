@@ -20,13 +20,22 @@
       replace: 'server.host: "0.0.0.0"'
 
   - name: Load the service files
-    shell: |
-      systemctl daemon-reload
+    ansible.builtin.service:
+      state: reloaded
+    # shell: |
+    #   systemctl daemon-reload
 
-  - name: Enable and start elasticsearch and kibana
-    shell: |
-      systemctl enable elasticsearch.service --now
-      systemctl enable kibana.service --now
+  - name: Enable and start Elasticsearch
+    ansible.builtin.service:
+      name: elasticsearch
+      enabled: true
+      state: restarted
+
+  - name: Enable and start Kibana
+    ansible.builtin.service:
+      name: kibana
+      enabled: true
+      state: restarted
 
   - name: Generate the Elastic enrollment token
     shell: |

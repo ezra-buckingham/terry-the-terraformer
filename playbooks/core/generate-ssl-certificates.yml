@@ -14,6 +14,12 @@
   shell: |
     certbot --apache --no-eff-email --agree-tos -m {{ main_email }} -n -d {{ domain }}
 
+- name: Enable and restart Apache2
+  ansible.builtin.service:
+    name: apache2
+    enabled: true
+    state: restarted
+
 - name: Restart apache
   shell: |
     systemctl restart apache2

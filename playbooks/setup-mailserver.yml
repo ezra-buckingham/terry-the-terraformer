@@ -128,10 +128,22 @@
       src: '{{ playbook_dir }}/../templates/opendkim/opendkim.j2'
       dest: /etc/default/opendkim
   
-  - name: Restart PostFix and OpenDKIM 
-    shell: |
-      systemctl stop opendkim postfix
-      systemctl enable opendkim postfix --now
+  - name: Enable and start OpenDKIM
+    ansible.builtin.service:
+      name: opendkim
+      enabled: true
+      state: restarted
+
+  - name: Enable and start Postfix
+    ansible.builtin.service:
+      name: postfix
+      enabled: true
+      state: restarted
+
+  # - name: Restart PostFix and OpenDKIM 
+  #   shell: |
+  #     systemctl stop opendkim postfix
+  #     systemctl enable opendkim postfix --now
 
   - name: Make the Postfix group own the OpenDKIM socket
     ansible.builtin.file:

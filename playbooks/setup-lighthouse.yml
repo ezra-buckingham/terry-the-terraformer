@@ -35,10 +35,11 @@
       - "{{ playbook_dir }}/../templates/elastic/logstash/logstash.d/*.j2"
       - "{{ playbook_dir }}/../templates/elastic/logstash/logstash.d/*.conf"
 
-  - name: Start the Logstash service
-    shell: |
-      systemctl stop logstash
-      systemctl enable logstash --now
+  - name: Enable and start Logstash
+    ansible.builtin.service:
+      name: logstash
+      enabled: true
+      state: restarted
 
   - name: Enforce firewall rules
     include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"

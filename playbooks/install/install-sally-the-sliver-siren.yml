@@ -34,6 +34,16 @@
     dest: /etc/systemd/system/sally.service
     remote_src: True
 
-- name: Load the new service file and start the service
-  shell: |
-    systemctl daemon-reload && systemctl start sally.service
+- name: Reload service files
+  ansible.builtin.service:
+    state: reloaded
+
+- name: Enable and start Sally
+  ansible.builtin.service:
+    name: sally
+    enabled: true
+    state: restarted
+
+# - name: Load the new service file and start the service
+#   shell: |
+#     systemctl daemon-reload && systemctl start sally.service
