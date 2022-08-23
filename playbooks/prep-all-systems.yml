@@ -31,14 +31,12 @@
     loop_control:
       label: "{{ item.value.user }}"
   
-  - name: Add SSH Keys
-    ansible.posix.authorized_key:
-      user: "{{ item.value.user }}"
-      state: present
-      key: "{{ item.value.public_key }}"
+  - name: Add SSH Keys for the defined users
+    include_tasks: "{{ playbook_dir }}/install/install-ssh-key.yml"
     loop: "{{ team | dict2items }}"
     loop_control:
-      label: "{{ item.value.user }}"
+      label: "{{ user.value.user }}"
+      loop_var: "user"
 
   - name: Allow the terryites group to sudo without a password
     ansible.builtin.lineinfile:

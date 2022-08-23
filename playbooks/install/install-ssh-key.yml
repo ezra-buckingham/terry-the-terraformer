@@ -1,0 +1,23 @@
+
+- name: Check if user's public key provided is a file path
+  stat:
+    path: "{{ user.value.public_key }}"
+  register: ssh_key_file
+  become: false
+  delegate_to: localhost
+
+- name: Set the content of the SSH key if a file
+  set_fact:
+    ssh_public_key: "{{ lookup('file', ssh_key_file.stat.path) }}"
+  when: ssh_key_file.stat.exists
+
+- name: Set the content of the SSH key if not a file
+  set_fact:
+    ssh_public_key: "{{ user.value.public_key }}"
+  when: not ssh_key_file.stat.exists
+
+- name: Add the SSH key for the user
+  ansible.posix.authorized_key:
+    user: "{{ user.value.user }}"
+    state: present
+    key: "{{ ssh_public_key }}"

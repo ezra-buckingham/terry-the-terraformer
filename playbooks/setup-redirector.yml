@@ -53,7 +53,7 @@
             # Example Redirect Rule
             # RewriteRule ^.*$ https://1.1.1.1:1111%{REQUEST_URI} [P]
 
-      - name: Enable and start Elasticsearch
+      - name: Enable and start Apache2
         ansible.builtin.service:
           name: apache2
           enabled: true
@@ -112,11 +112,11 @@
             [Install]
             WantedBy=multi-user.target
       
-      - name: Enable and start Elasticsearch
+      - name: Load the service files
         ansible.builtin.service:
           state: reloaded
 
-      - name: Enable and start Elasticsearch
+      - name: Enable and start dns-redirector
         ansible.builtin.service:
           name: dns-redirector
           enabled: true
