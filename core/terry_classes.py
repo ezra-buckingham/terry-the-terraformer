@@ -383,7 +383,7 @@ class Domain(TerraformObject):
 class Server(AnsibleControlledObject, TerraformObject):
     """Base class for representing servers"""
 
-    def __init__(self, name, provider, server_type, domain, containers=[], domain_to_impersonate=None, redirector_type=None, proxy_to=None, dns_setup=None):
+    def __init__(self, name, provider, server_type, domain, containers=[], domain_to_impersonate=None, redirector_type=None, redirect_to=None, dns_setup=None):
         self.resource_type = 'server'
         self.name = name
         self.server_type = server_type
@@ -395,7 +395,7 @@ class Server(AnsibleControlledObject, TerraformObject):
         # Specific Properties for Server Types
         self.domain_to_impersonate = domain_to_impersonate
         self.redirector_type = redirector_type
-        self.proxy_to = proxy_to
+        self.redirect_to = redirect_to
         self.dns_setup = dns_setup
 
         # Init the Parents
@@ -598,8 +598,8 @@ class Categorize(Server):
 class Redirector(Server):
     """Class for Redirectors, providing obfuscation layer between internet / victim and teamserver(s)."""
 
-    def __init__(self, name, provider, domain, redirector_type, proxy_to):
+    def __init__(self, name, provider, domain, redirector_type, redirect_to):
         self.redirector_type = redirector_type
-        self.proxy_to = proxy_to
+        self.redirect_to = redirect_to
 
-        Server.__init__(self, name, provider, 'redirector', domain, redirector_type=redirector_type, proxy_to=proxy_to)
+        Server.__init__(self, name, provider, 'redirector', domain, redirector_type=redirector_type, redirect_to=redirect_to)

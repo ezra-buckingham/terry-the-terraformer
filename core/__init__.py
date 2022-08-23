@@ -213,6 +213,28 @@ def configure_nebula(ctx_obj):
             ctx_obj['lighthouse_nebula_ip'] = resource.nebula_ip
             
     LogHandler.info('Nebula certificates created. Out of this world, huh?')
+    
+    
+@click.pass_obj
+def configure_redirectors(ctx_obj):
+    """_summary_
+
+    Args:
+        ctx_obj (_type_): _description_
+    """    
+    
+    LogHandler.info('Getting IPs for Redirector configurations')
+    
+    for resource in ctx_obj['resources']:
+        if isinstance(resource, Redirector):
+            redirect_to_server = get_server_from_uuid_or_name(resource.redirect_to)
+            
+            if redirect_to_server.nebula_ip:
+                resource.redirect_to = redirect_to_server.nebula_ip
+            else:
+                resource.redirect_to = redirect_to_server.public_ip
+        
+    LogHandler.info('Redirectors configured')
 
 
 @click.pass_context
@@ -517,7 +539,7 @@ def get_server_from_uuid_or_name(ctx_obj, resource_uuid_or_name):
         resource = [ server for server in  ctx_obj['resources'] if isinstance(server, Server) and server.name == resource_uuid_or_name ]
 
     if len(resource) != 1:
-        LogHandler.critical(f'Unable to find one and exactly one matching server resource using the value "{ resource_uuid_or_name }"')
+        LogHandler.critical(f'Unable to find one and exactly one matching server resource using the value "{ resource_uuid_or_name }", please check that the "--server_name / -sN" you are using exists (and is defined before the resource that references it)')
 
     return resource[0]
 

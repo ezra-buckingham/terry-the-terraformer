@@ -271,6 +271,9 @@ def build_infrastructure(ctx, resources):
 
     # Configure Nebula
     configure_nebula()
+    
+    # Configure Redirectors
+    configure_redirectors()
 
     # Create the build manifest and run Ansible
     create_build_manifest()
@@ -308,7 +311,7 @@ def add(ctx_obj):
     
 
 @add.result_callback()
-def add_infrstructure(resources):
+def add_infrastructure(resources):
     build_infrastructure(resources)
 
 
@@ -395,13 +398,16 @@ def reconfigure(ctx_obj):
     Type redirector to build (options are {get_implemented_redirector_types()})
     ''')
 @click.option('--redirect_to', '-r2', type=str, help='''
-    Domain to redirect to / impersonate (only deployed with categorize servers)
+    Name / UUID of server to redirect to (or just a FQDN / IP address for static redirection)
+    ''')
+@click.option('--domain_to_impersonate', '-dI', type=str, help='''
+    FQDN of the domain to impersonate when traffic that doesn't match your C2 redirection rules hits a redirector (or just domain to impersonate for categorization server)
     ''')
 @click.option('--fqdn', '-d', multiple=True, type=str, help='''
     Domain and registrar to use in creation of an A record for the resource formatted as "<domain>:<registrar>" (Example: domain example.com with registrar aws should be "example.com:aws)"
     ''')
 @click.pass_context
-def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, container):
+def server(ctx, provider, type, name, redirector_type, redirect_to, domain_to_impersonate, fqdn, container):
     """Create a server resource"""
     
     # Check for that name already existing
@@ -426,7 +432,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
     for domain_index, domain_record in enumerate(domains):
         domains[domain_index] = domain_record.split(':')
         if len(domains[domain_index]) != 2: 
-            LogHandler.critical(f'Domain expects be formated as "<domain>:<registrar>" (example: "example.com:aws")')
+            LogHandler.critical(f'Domain expects be formatted as "<domain>:<registrar>" (example: "example.com:aws")')
 
     # Build the container objects & priority domain
     containers = [Container(x) for x in list(container)]
@@ -441,7 +447,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
         server = Teamserver(name, provider, priority_domain, containers)
         ctx.obj['resources'].append(server)
     elif type == 'categorize':
-        server = Categorize(name, provider, priority_domain, redirect_to)
+        server = Categorize(name, provider, priority_domain, domain_to_impersonate)
         ctx.obj['resources'].append(server)
     elif type == 'lighthouse':
         server = Lighthouse(name, provider, priority_domain)
@@ -461,6 +467,10 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, fqdn, contai
         ctx.invoke(domain, provider=main_domain[1], domain=mx_domain_value, type='MX', value=f'10 { mx_domain_value }')
         ctx.invoke(domain, provider=main_domain[1], domain=dmarc_domain, type='TXT', value=dmarc_value)
     elif type == 'redirector':
+        # First make sure we have a matching server, which will error out if not
+        get_server_from_uuid_or_name(redirect_to)
+        
+        # Create the server
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
         # Check how many domains we have set
         if len(domains) == 0:
