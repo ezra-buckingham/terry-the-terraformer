@@ -1,14 +1,23 @@
 
-- name: "Open up the {{ service.container_name }} ports to the team (system ports)"
-  shell: |
-    ufw allow from {{ item[0].value.public_ip }} proto {{ item[1] | split('/') | last }} to any port {{ item[1] | split(':') | first }}
+- name: "UFW Allow {{ service.container_name }} ports to the team (system ports)"
+  community.general.ufw:
+    rule: allow
+    proto: "{{ item[1] | split('/') | last }}"
+    port: "{{ item[1] | split(':') | first }}"
+    src: "{{ item[0].value.public_ip }}"
+    comment: "Allow {{ item[1] | split(':') | first }}/{{ item[1] | split(':') | first }} {{ item[0].value.user }}"
   loop: "{{ team | dict2items | product(service.ports) | list }}"
   loop_control:
     label: "{{ item[0].value.user }} -> {{ item[1] }}"
     
-- name: "Open up the {{ service.container_name }} ports to the team (container routes)"
-  shell: |
-    ufw route allow from {{ item[0].value.public_ip }} proto {{ item[1] | split('/') | last }} to any port {{ item[1] | split(':') | last | split('/') | first }}
+- name: "UFW Route Allow {{ service.container_name }} ports to the team (container routes)"
+  community.general.ufw:
+    route: yes
+    rule: allow
+    proto: "{{ item[1] | split('/') | last }}"
+    port: "{{ item[1] | split(':') | last | split('/') | first }}"
+    src: "{{ item[0].value.public_ip }}"
+    comment: "Allow route {{ item[1] | split(':') | last | split('/') | first }}/{{ item[1] | split(':') | first }} {{ item[0].value.user }}"
   loop: "{{ team | dict2items | product(service.ports) | list }}"
   loop_control:
     label: "{{ item[0].value.user }} -> {{ item[1] }} (route)"

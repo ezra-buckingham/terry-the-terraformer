@@ -16,6 +16,8 @@
 # don't log noisy broadcast
 -A ufw-after-input -m addrtype --dst-type BROADCAST -j ufw-skip-to-policy-input
 
+COMMIT
+
 ####### BEGIN UFW AND DOCKER #######
 *filter
 :ufw-user-forward - [0:0]
@@ -31,7 +33,6 @@
 -A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
 -A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
 -A DOCKER-USER -j RETURN
-# END UFW AND DOCKER
 
 # don't delete the 'COMMIT' line or these rules won't be processed
 COMMIT

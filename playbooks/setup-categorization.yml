@@ -39,5 +39,6 @@
         RewriteEngine On
         RewriteRule ^.*$ https://{{ domain_to_impersonate }}/ [R,L]
     
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  - name: Enable and Start UFW
+    community.general.ufw:
+      state: enabled

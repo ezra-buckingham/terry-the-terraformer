@@ -66,10 +66,10 @@
 
       - name: Remove UFW Allow HTTP
         community.general.ufw:
-          delete: true
+          rule: allow
           proto: tcp
           port: 80
-          comment: "Allow HTTP in"
+          delete: true
 
       - name: Enable and Restart Apache2
         ansible.builtin.service:
@@ -120,6 +120,7 @@
           enabled: true
           state: reloaded
 
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  - name: Enable and Start UFW
+    community.general.ufw:
+      state: enabled
 
