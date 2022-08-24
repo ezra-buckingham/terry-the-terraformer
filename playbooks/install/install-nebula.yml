@@ -54,15 +54,24 @@
     state: reloaded
     enabled: true
 
-- name: Open the UFW firewall to allow Nebula subnet to communicate freely (standard)
+- name: Open the UFW firewall to allow Nebula subnet to communicate freely in (standard)
   community.general.ufw:
     rule: allow
     interface: nebula1
-    comment: "Allow Nebula Network to all"
+    direction: in
+    comment: "Allow in Nebula Network to all"
 
+- name: Open the UFW firewall to allow Nebula subnet to communicate freely out (standard)
+  community.general.ufw:
+    rule: allow
+    interface: nebula1
+    direction: out
+    comment: "Allow out Nebula Network to all"
+    
 - name: Open the UFW firewall to allow Nebula subnet to communicate freely (routes)
   community.general.ufw:
     rule: allow
-    interface: nebula1
+    interface_in: nebula1
+    interface_out: nebula1
     route: yes
     comment: "Allow Nebula Network to all"
