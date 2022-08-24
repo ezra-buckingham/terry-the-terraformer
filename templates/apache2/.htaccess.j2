@@ -1,0 +1,27 @@
+RewriteEngine On
+
+#################################################################
+# Welcome to the .htaccess, to use this for reverse proxying
+# traffic, please only comment out ONE of the examples below
+# you may need to change the redirection rules a bit.
+# If you are unsure of the rules working properly, take
+# a look at /var/log/apache2/error.log
+#################################################################
+
+
+############ Start Basic Example Redirect Rule ############
+
+# RewriteRule ^.*$ https://{{ redirect_to }}:443%{REQUEST_URI} [P]
+
+############ End Basic Example Redirect Rule ############
+
+
+############ Start Basic Example Redirect Rule (UA Filter) ############
+
+# Description: If UA matches any of the below, redirect to google.com
+
+# RewriteCond %{HTTP_USER_AGENT} "wget|curl|HTTrack|crawl|google|bot|b\-o\-t|spider|baidu" [NC]
+# RewriteRule ^.*$ https://www.google.com [L,R=302]
+# RewriteRule ^.*$ https://{{ redirect_to }}:443%{REQUEST_URI} [P]
+
+############ End Basic Example Redirect Rule (UA Filter) ############
