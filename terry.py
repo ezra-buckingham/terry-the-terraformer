@@ -273,7 +273,7 @@ def build_infrastructure(ctx, resources):
     configure_nebula()
     
     # Configure Redirectors
-    configure_redirectors()
+    # TODO configure_redirectors()
 
     # Create the build manifest and run Ansible
     create_build_manifest()
@@ -468,7 +468,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, domain_to_im
         ctx.invoke(domain, provider=main_domain[1], domain=dmarc_domain, type='TXT', value=dmarc_value)
     elif type == 'redirector':
         # First make sure we have a matching server, which will error out if not
-        if redirect_to: get_server_from_uuid_or_name(redirect_to)
+        # TODO if redirect_to: get_server_from_uuid_or_name(redirect_to)
         
         # Create the server
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
