@@ -9,6 +9,10 @@
   shell: |
     a2enmod rewrite proxy proxy_http ssl proxy_html headers
 
+- name: Disable Apache2 compression
+  shell: |
+    a2dismod deflate -f
+
 - name: Start Apache2
   ansible.builtin.service:
     name: apache2
