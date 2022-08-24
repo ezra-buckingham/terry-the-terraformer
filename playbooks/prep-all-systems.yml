@@ -11,13 +11,13 @@
       state: present
 
   - name: Set the hostname of the server to be the domain name (if set)
-    shell: |
-      hostnamectl set-hostname {{ domain }}
+    ansible.builtin.hostname:
+      name: "{{ domain }}"
     when: domain is defined
 
   - name: Set the hostname of the server to be the resource name (when domain not set)
-    shell: |
-      hostnamectl set-hostname {{ name }}
+    ansible.builtin.hostname:
+      name: "{{ name }}"
     when: domain is undefined
 
   - name: Add the team as users to server

@@ -1,0 +1,13 @@
+[Unit]
+Description=Nebula Mesh VPN Service
+
+[Service]
+Type=simple
+User=root
+StandardOutput=syslog
+StandardError=syslog
+WorkingDirectory=/opt/nebula
+ExecStart=/opt/nebula/nebula -config config.yaml
+
+[Install]
+WantedBy=multi-user.target

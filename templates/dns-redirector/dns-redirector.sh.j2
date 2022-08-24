@@ -1,0 +1,2 @@
+#!/bin/bash
+/usr/bin/socat -T 5 udp4-listen:53,fork udp4:`cat /opt/socat/config.conf`

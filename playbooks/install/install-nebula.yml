@@ -41,36 +41,15 @@
     dest: '/opt/nebula/config.yaml'
 
 - name: Create the Nebula service
-  ansible.builtin.copy: 
+  ansible.builtin.template: 
+    src: '{{ playbook_dir }}/../templates/nebula/nebula.service.j2'
     dest: /etc/systemd/system/nebula.service
-    content: |
-      [Unit]
-      Description=Nebula Mesh VPN Service
 
-      [Service]
-      Type=simple
-      User=root
-      StandardOutput=syslog
-      StandardError=syslog
-      WorkingDirectory=/opt/nebula
-      ExecStart=/opt/nebula/nebula -config config.yaml
-
-      [Install]
-      WantedBy=multi-user.target
-
-- name: Reload service files
-  ansible.builtin.service:
-    state: reloaded
-
-- name: Enable and start Nebula
+- name: Load, Enable, and Start the Nebula service
   ansible.builtin.service:
     name: nebula
+    state: reloaded
     enabled: true
-    state: restarted
-
-# - name: Load the new service file and start the service
-#   shell: |
-#     systemctl daemon-reload && systemctl --now enable nebula.service
 
 - name: Open the UFW firewall to allow Nebula subnet to communicate freely
   shell: |

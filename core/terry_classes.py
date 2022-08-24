@@ -488,8 +488,8 @@ class Server(AnsibleControlledObject, TerraformObject):
         if self.redirector_type:
             self_dict['redirector_type'] = self.redirector_type
 
-        if self.proxy_to:
-            self_dict['proxy_to'] = self.redirector_type
+        if self.redirect_to:
+            self_dict['redirect_to'] = self.redirect_to
             
         if self.dns_setup:
             self_dict['dns_setup'] = self.dns_setup

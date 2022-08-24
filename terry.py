@@ -181,7 +181,7 @@ def destroy(ctx_obj, recursive):
                 remove_directory_recursively(ctx_obj["op_directory"])
                 LogHandler.info('File destruction complete!')
             else:
-                LogHandler.critical(f'No files or folder found for "{ ctx_obj["operation"] }"', True)
+                LogHandler.critical(f'No files or folder found for "{ ctx_obj["operation"] }"')
         else:
             LogHandler.warn('Leaving all build files intact. If you wish to destroy them, use the "-r" / "--recursive" flag')
     else:
@@ -468,7 +468,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, domain_to_im
         ctx.invoke(domain, provider=main_domain[1], domain=dmarc_domain, type='TXT', value=dmarc_value)
     elif type == 'redirector':
         # First make sure we have a matching server, which will error out if not
-        get_server_from_uuid_or_name(redirect_to)
+        if redirect_to: get_server_from_uuid_or_name(redirect_to)
         
         # Create the server
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
