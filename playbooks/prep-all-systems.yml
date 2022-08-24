@@ -11,13 +11,13 @@
       state: present
 
   - name: Set the hostname of the server to be the domain name (if set)
-    shell: |
-      hostnamectl set-hostname {{ domain }}
+    ansible.builtin.hostname:
+      name: "{{ domain }}"
     when: domain is defined
 
   - name: Set the hostname of the server to be the resource name (when domain not set)
-    shell: |
-      hostnamectl set-hostname {{ name }}
+    ansible.builtin.hostname:
+      name: "{{ name }}"
     when: domain is undefined
 
   - name: Add the team as users to server
@@ -45,17 +45,25 @@
       state: present
 
   - name: Update APT repositories cache and install "ufw" and "tmux" packages
-    apt:
+    ansible.builtin.apt:
       pkg:
         - ufw
         - tmux
       update_cache: yes
       lock_timeout: 360
 
-  - name: Prep the UFW Firewall
-    shell: |
-      ufw default deny incoming
-      ufw allow from {{ item.value.public_ip }} proto tcp to any port 22 
+  - name: Modify UFW config to govern docker routing (or else firewall rules will fail for docker containers)
+    ansible.builtin.copy:
+      src: "{{ playbook_dir }}/../templates/ufw/after.rules.j2"
+      dest: /etc/ufw/after.rules
+
+  - name: Allow SSH connections from the team
+    community.general.ufw:
+      rule: allow
+      proto: tcp
+      src: "{{ item.value.public_ip }}"
+      port: 22
+      comment: "Allow SSH {{ item.value.user }}"
     loop: "{{ team | dict2items }}"
     loop_control:
       label: "{{ item.value.user }}"
@@ -68,6 +76,8 @@
     include_tasks: '{{ playbook_dir }}/install/install-filebeat.yml'
     when: elastic
 
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  - name: Enable and start UFW
+    community.general.ufw:
+      state: enabled
+
       

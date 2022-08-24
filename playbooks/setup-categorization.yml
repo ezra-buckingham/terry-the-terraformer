@@ -5,14 +5,23 @@
   tasks:  
 
   - name: Verify UFW installed
-    apt:
+    ansible.builtin.apt:
       name: ufw
       state: present
 
-  - name: Allow all web traffic in the firewall
-    shell: |
-      ufw allow from any proto tcp to any port 80
-      ufw allow from any proto tcp to any port 443
+  - name: UFW Allow HTTP
+    community.general.ufw:
+      rule: allow
+      proto: tcp
+      port: 80
+      comment: "Allow HTTP in"
+
+  - name: UFW Allow HTTPS
+    community.general.ufw:
+      rule: allow
+      proto: tcp
+      port: 443
+      comment: "Allow HTTPS in"
 
   - name: Install Apache2
     import_tasks: "{{ playbook_dir }}/install/install-apache.yml"
@@ -24,11 +33,12 @@
     include_tasks: '{{ playbook_dir }}/core/generate-ssl-certificates.yml'
   
   - name: Create the htaccess file for domain impersonation
-    copy:
+    ansible.builtin.copy:
       dest: /var/www/html/.htaccess
       content: |
         RewriteEngine On
         RewriteRule ^.*$ https://{{ domain_to_impersonate }}/ [R,L]
     
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  - name: Enable and Start UFW
+    community.general.ufw:
+      state: enabled

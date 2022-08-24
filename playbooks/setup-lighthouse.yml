@@ -41,6 +41,7 @@
       enabled: true
       state: restarted
 
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  - name: Enable and Start UFW
+    community.general.ufw:
+      state: enabled
       

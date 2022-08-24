@@ -6,14 +6,28 @@
     ssl_configuration_location: /etc/apache2/sites-available/000-default-le-ssl.conf
   tasks:  
 
+  - name: Set a dummy redirect_to if not set for the server
+    set_fact:
+      redirect_to: "8.8.8.8"
+    when: redirect_to is undefined or len(redirect_to) < 1
+
   - name: Logic for HTTP Redirector
     when: redirector_type == 'https'
     block:
 
-      - name: Allow all web traffic in the firewall
-        shell: |
-          ufw allow from any proto tcp to any port 80
-          ufw allow from any proto tcp to any port 443
+      - name: UFW Allow HTTP
+        community.general.ufw:
+          rule: allow
+          proto: tcp
+          port: 80
+          comment: "Allow HTTP in"
+
+      - name: UFW Allow HTTPS
+        community.general.ufw:
+          rule: allow
+          proto: tcp
+          port: 443
+          comment: "Allow HTTPS in"
 
       - name: Install apache on the server
         include_tasks: '{{ playbook_dir }}/install/install-apache.yml'
@@ -46,32 +60,36 @@
         when: proxy_set.stdout_lines | length == 0
       
       - name: Create the htaccess file for domain impersonation and redirection
-        copy:
+        ansible.builtin.template:
+          src: '{{ playbook_dir }}/../templates/apache2/.htaccess.j2'
           dest: /var/www/html/.htaccess
-          content: |
-            RewriteEngine On
-            # Example Redirect Rule
-            # RewriteRule ^.*$ https://1.1.1.1:1111%{REQUEST_URI} [P]
 
-      - name: Enable and start Apache2
+      - name: Remove UFW Allow HTTP
+        community.general.ufw:
+          rule: allow
+          proto: tcp
+          port: 80
+          delete: true
+
+      - name: Enable and Restart Apache2
         ansible.builtin.service:
           name: apache2
           enabled: true
           state: restarted
-      # - name: Restart Apache2 Service
-      #   shell: | 
-      #     systemctl restart apache2
 
   - name: Logic for DNS Redirector
     when: redirector_type == 'dns'
     block:
 
-      - name: Allow all dns traffic in the firewall
-        shell: |
-          ufw allow from any proto udp to any port 53
+      - name: UFW Allow DNS
+        community.general.ufw:
+          rule: allow
+          proto: udp
+          port: 53
+          comment: "Allow DNS in"
 
       - name: Install socat on the server
-        apt: 
+        ansible.builtin.apt: 
           name: socat
           state: latest
           update_cache: true
@@ -82,51 +100,27 @@
           state: directory
 
       - name: Create the DNS redirector configuration file
-        ansible.builtin.copy:
+        ansible.builtin.template:
+          src: '{{ playbook_dir }}/../templates/dns-redirector/config.conf.j2'
           dest: /opt/socat/config.conf
-          content: |
-            1.1.1.1:153
       
       - name: Create the DNS redirector bash script
         ansible.builtin.copy:
+          src: '{{ playbook_dir }}/../templates/dns-redirector/dns-redirector.sh.j2'
           dest: /opt/socat/dns-redirector.sh
-          content: |
-            #!/bin/bash
-            /usr/bin/socat -T 5 udp4-listen:53,fork udp4:`cat /opt/socat/config.conf`
       
       - name: Create the Service File for the DNS Redirector
         ansible.builtin.copy: 
+          src: '{{ playbook_dir }}/../templates/dns-redirector/dns-redirector.sh.j2'
           dest: /etc/systemd/system/dns-redirector.service
-          content: |
-            [Unit]
-            Description=Simple DNS Redirector using Socat
 
-            [Service]
-            Type=simple
-            User=root
-            StandardOutput=syslog
-            StandardError=syslog
-            WorkingDirectory=/opt/socat
-            ExecStart=/bin/bash dns-redirector.sh
-
-            [Install]
-            WantedBy=multi-user.target
-      
-      - name: Load the service files
-        ansible.builtin.service:
-          state: reloaded
-
-      - name: Enable and start dns-redirector
+      - name: Load, Enable, and Start the DNS Redirector service
         ansible.builtin.service:
           name: dns-redirector
           enabled: true
-          state: restarted
+          state: reloaded
 
-      # - name: Load the new service file and start the service
-      #   shell: |
-      #     systemctl daemon-reload && systemctl start dns-redirector.service
-
-
-  - name: Enforce firewall rules
-    include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  - name: Enable and Start UFW
+    community.general.ufw:
+      state: enabled
 

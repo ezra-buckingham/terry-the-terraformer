@@ -3,11 +3,12 @@
 # This is a standard Docker Compose file except for the presence of the "required_args",
 # "pre_run_commands", and "post_run_commands" which all MUST be blank if there is nothing to 
 # run / no required args. The "required_args" are the required arguments to run the container
-# If youvhave tasks you need to run, they should be VALID Ansible tasks and all Jinja templates
+# If you have tasks you need to run, they should be VALID Ansible tasks and all Jinja templates
 # MUST be escaped with [[ ]] in order to work. 
 
 # NOTE: Jinja values that are NOT escaped are populated by Ansible at playbook init and if
-# there are undefined values, Ansible will throw an error
+# there are undefined values, Ansible will throw an error. That is important since inside of
+# the ansible tasks themselves contain valid Jinja that get populated dynamically by loops
 
 ########################################################################################
 
@@ -15,7 +16,7 @@ services:
   cobaltstrike:
     container_name: cobaltstrike
     image: <image_path>
-    command: "[[ ansible_ssh_host ]] [[ lookup('env', 'COBALTSTRIKE_PASSWORD') ]] /opt/cobaltstrike/mount/c2.profile"
+    command: "[[ inventory_hostname ]] [[ lookup('env', 'COBALTSTRIKE_PASSWORD') ]] /opt/cobaltstrike/mount/c2.profile"
     stdin_open: false
     tty: false
     ports:

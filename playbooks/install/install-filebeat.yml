@@ -22,16 +22,10 @@
     src: '{{ playbook_dir }}/../templates/elastic/filebeat/filebeat.yml.j2'
     dest: /etc/filebeat/filebeat.yml
 
-- name: Enable and restart Filebeat
+- name: Enable and Restart Filebeat
   ansible.builtin.service:
     name: filebeat
     enabled: true
     state: restarted
-
-# - name: Start the Filebeat service
-#   shell: |
-#     systemctl stop filebeat
-#     systemctl enable filebeat --now
-    
 
  

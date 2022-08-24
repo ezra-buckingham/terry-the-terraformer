@@ -7,7 +7,7 @@
   # https://www.linuxbabe.com/mail-server/setting-up-dkim-and-spf
 
   - name: Verify UFW installed
-    apt:
+    ansible.builtin.apt:
       name: ufw
       state: present
 
@@ -23,7 +23,7 @@
       executable: /bin/bash
 
   - name: Install Mailutils, PostFix and OpenDKIM
-    apt:
+    ansible.builtin.apt:
       pkg: 
         - mailutils
         - postfix
@@ -46,8 +46,9 @@
   #   shell: |
   #     ufw allow 80
       
-  # - name: Enforce firewall rules
-  #   include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  # - name: Enable and Start UFW
+  #   community.general.ufw:
+  #     state: enabled
   
   # - name: Request the SSL cert for the domain
   #   shell: |

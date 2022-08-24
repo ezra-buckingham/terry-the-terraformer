@@ -1,0 +1,13 @@
+[Unit]
+Description=Simple DNS Redirector using Socat
+
+[Service]
+Type=simple
+User=root
+StandardOutput=syslog
+StandardError=syslog
+WorkingDirectory=/opt/socat
+ExecStart=/bin/bash dns-redirector.sh
+
+[Install]
+WantedBy=multi-user.target

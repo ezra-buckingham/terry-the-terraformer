@@ -5,7 +5,7 @@
     state: absent
 
 - name: Generate the sliver config for the custom sliver client
-  shell: |
+  ansible.builtin.shell: |
     docker exec sliver /opt/sliver/sliver-server operator --lhost 127.0.0.1 --lport 3333 --name sally-sliver-siren --save /opt/sliver/mount/sally-sliver-siren.conf
 
 - name: Clone the sally the sliver siren repo
@@ -14,13 +14,13 @@
     dest: /opt/sally-the-sliver-siren
 
 - name: Install pip
-  apt:
+  ansible.builtin.apt:
     name: python3-pip
     state: present
 
-- name: Install all dependencies (this will take a while)
-  shell: |
-    python3 -m pip install -r /opt/sally-the-sliver-siren/requirements.txt
+- name: Install Sally pip dependencies
+  ansible.builtin.pip:
+    requirements: /opt/sally-the-sliver-siren/requirements.txt
 
 - name: Copy the Sally config
   ansible.builtin.copy:
@@ -34,16 +34,8 @@
     dest: /etc/systemd/system/sally.service
     remote_src: True
 
-- name: Reload service files
-  ansible.builtin.service:
-    state: reloaded
-
-- name: Enable and start Sally
+- name: Load, Enable, and Start the Sally service
   ansible.builtin.service:
     name: sally
     enabled: true
-    state: restarted
-
-# - name: Load the new service file and start the service
-#   shell: |
-#     systemctl daemon-reload && systemctl start sally.service
+    state: reloaded
