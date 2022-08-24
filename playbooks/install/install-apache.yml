@@ -10,7 +10,7 @@
     a2enmod rewrite proxy proxy_http ssl proxy_html headers
 
 - name: Start Apache2
-  service:
+  ansible.builtin.service:
     name: apache2
     state: started
   
@@ -23,6 +23,6 @@
     replace: '\tAllowOverride All'
   
 - name: Restart the Apache service
-  service:
+  ansible.builtin.service:
     name: apache2
     state: restarted

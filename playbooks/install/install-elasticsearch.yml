@@ -1,6 +1,6 @@
 
 - name: Install all Elastic dependencies
-  apt:
+  ansible.builtin.apt:
     pkg:
       - apt-transport-https
       - curl
@@ -17,7 +17,7 @@
     state: present
 
 - name: Install Elastic and Kibana
-  apt:
+  ansible.builtin.apt:
     pkg: 
       - elasticsearch
       - kibana

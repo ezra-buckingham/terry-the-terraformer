@@ -1,6 +1,6 @@
 
 - name: Install snapd
-  apt:
+  ansible.builtin.apt:
     name: snapd
     state: latest
 

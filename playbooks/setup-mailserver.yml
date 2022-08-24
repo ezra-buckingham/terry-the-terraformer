@@ -7,7 +7,7 @@
   # https://www.linuxbabe.com/mail-server/setting-up-dkim-and-spf
 
   - name: Verify UFW installed
-    apt:
+    ansible.builtin.apt:
       name: ufw
       state: present
 
@@ -23,7 +23,7 @@
       executable: /bin/bash
 
   - name: Install Mailutils, PostFix and OpenDKIM
-    apt:
+    ansible.builtin.apt:
       pkg: 
         - mailutils
         - postfix

@@ -1,12 +1,12 @@
 ---
-- name: Clean the system from all old users and firewall configurations
+- name: Clean the system from all old users and old firewall configurations
   gather_facts: true
   hosts: all
   become: true
   tasks:
 
   - name: Verify UFW installed (install if not)
-    apt:
+    ansible.builtin.apt:
       name: ufw
       update_cache: yes
       lock_timeout: 360
@@ -31,7 +31,7 @@
       removed_users: "{{ existing_users.stdout_lines | difference(team_usernames) }}"
 
   - name: Delete removed user accounts
-    user:
+    ansible.builtin.user:
       name: "{{ user_to_remove }}"
       state: absent
     loop: "{{ removed_users }}"
@@ -39,6 +39,6 @@
       loop_var: "user_to_remove"
 
   - name: Reset the UFW Firewall
-    shell: |
-      ufw --force reset
+    community.general.ufw:
+      state: reset
       

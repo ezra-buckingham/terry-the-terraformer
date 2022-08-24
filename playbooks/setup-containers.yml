@@ -9,7 +9,7 @@
   tasks:
 
   - name: Verify UFW installed
-    apt:
+    ansible.builtin.apt:
       name: ufw
       state: present
 
@@ -18,8 +18,8 @@
     when: containers is defined
     block:
 
-    # - name: Install Docker on the host
-    #   include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
+    - name: Install Docker on the host
+      include_tasks: '{{ playbook_dir }}/install/install-docker.yml'
 
     - name: Create directories for each containers for on the host
       ansible.builtin.file:
@@ -42,7 +42,7 @@
       become: false # Do not try to run as sudo
       block:
 
-        - name: Get Docker configuration for selected continers from container_mappings.yml
+        - name: Get Docker configuration for selected containers from container_mappings.yml
           set_fact:
             docker_services: '{{ containers.keys() | list | map("extract", services) }}'
 
@@ -53,11 +53,11 @@
 
         - name: Append the new the docker-compose.yml file to the jinja_unescape_paths list for later processing
           set_fact:
-            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_docker-compose.yml" ]'
+            jinja_unescape_paths: '{{ jinja_unescape_paths + [ op_directory + "/ansible/extra_tasks/" + inventory_hostname + "_docker-compose.yml" ] }}'
         
         - name: Append all existing pre_run_commands and post_run_commands to the jinja_unescape_paths list for later processing
           set_fact:
-            jinja_unescape_paths: '{{ jinja_unescape_paths }} + [ "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml", "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml" ]'
+            jinja_unescape_paths: '{{ jinja_unescape_paths + [ op_directory + "/ansible/extra_tasks/" + inventory_hostname + "_" + item.container_name + "-pre_run_commands.yml", op_directory + "/ansible/extra_tasks/" + inventory_hostname + "_" + item.container_name + "-post_run_commands.yml" ] }}'
           loop: "{{ docker_services }}"
           loop_control:
             label: "{{ item.container_name }}"
@@ -94,23 +94,26 @@
         dest: '/opt/container/docker-compose.yml'
 
     - name: Authenticate to the container registry
-      shell: |
-        docker login {{ lookup('env', 'CONTAINER_REGISTRY') }} -u {{  lookup('env', 'CONTAINER_REGISTRY_USERNAME') }} -p {{  lookup('env', 'CONTAINER_REGISTRY_PASSWORD') }}
+      community.docker.docker_login:
+        registry: "{{ lookup('env', 'CONTAINER_REGISTRY') }}"
+        username: "{{ lookup('env', 'CONTAINER_REGISTRY_USERNAME') }}"
+        password: "{{ lookup('env', 'CONTAINER_REGISTRY_PASSWORD') }}"
     
     - name: Run the pre_run_commands for each container
-      ansible.builtin.include_tasks:
+      include_tasks:
         file: "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
       loop: "{{ docker_services }}"
       loop_control:
         label: "{{ item.container_name }}"
 
+    # Intentionally not using the community.docker.docker_compose module as it has dependencies that take 5+ min to install
+    # and a lot of installation issues seem to come up from installing the pip module needed
     - name: Bring up all the containers (may take a while to pull back the container images)
-      community.docker.docker_compose:
-        project_src: /opt/container
-        state: present
+      shell: |
+        cd /opt/container/ && docker compose up -d
 
     - name: Run the post_run_commands for each container
-      ansible.builtin.include_tasks:
+      include_tasks:
         file: "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-post_run_commands.yml"
       loop: "{{ docker_services }}"
       loop_control:

@@ -15,10 +15,19 @@
     when: redirector_type == 'https'
     block:
 
-      - name: Allow all web traffic in the firewall
-        shell: |
-          ufw allow from any proto tcp to any port 80
-          ufw allow from any proto tcp to any port 443
+      - name: UFW Allow HTTP
+        community.general.ufw:
+          rule: allow
+          proto: tcp
+          port: 80
+          comment: "Allow HTTP in"
+
+      - name: UFW Allow HTTPS
+        community.general.ufw:
+          rule: allow
+          proto: tcp
+          port: 443
+          comment: "Allow HTTPS in"
 
       - name: Install apache on the server
         include_tasks: '{{ playbook_dir }}/install/install-apache.yml'
@@ -52,9 +61,17 @@
       
       - name: Create the htaccess file for domain impersonation and redirection
         ansible.builtin.template:
+          src: '{{ playbook_dir }}/../templates/apache2/.htaccess.j2'
           dest: /var/www/html/.htaccess
 
-      - name: Enable and Start Apache2
+      - name: Remove UFW Allow HTTP
+        community.general.ufw:
+          delete: true
+          proto: tcp
+          port: 80
+          comment: "Allow HTTP in"
+
+      - name: Enable and Restart Apache2
         ansible.builtin.service:
           name: apache2
           enabled: true
@@ -64,12 +81,15 @@
     when: redirector_type == 'dns'
     block:
 
-      - name: Allow all dns traffic in the firewall
-        shell: |
-          ufw allow from any proto udp to any port 53
+      - name: UFW Allow DNS
+        community.general.ufw:
+          rule: allow
+          proto: udp
+          port: 53
+          comment: "Allow DNS in"
 
       - name: Install socat on the server
-        apt: 
+        ansible.builtin.apt: 
           name: socat
           state: latest
           update_cache: true

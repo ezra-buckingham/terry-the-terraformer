@@ -1,8 +1,11 @@
 
 - name: Allow all Nebula traffic in the Lighthouse firewall
+  community.general.ufw:
+    rule: allow
+    proto: udp
+    port: 4242
+    comment: "Allow Nebula in"
   when: am_lighthouse is defined and am_lighthouse
-  shell: |
-    ufw allow from any proto udp to any port 4242
 
 - name: Create the Nebula directory
   ansible.builtin.file:
@@ -51,7 +54,15 @@
     state: reloaded
     enabled: true
 
-- name: Open the UFW firewall to allow Nebula subnet to communicate freely
-  shell: |
-    ufw allow in on nebula1
-    ufw route allow in on nebula1
+- name: Open the UFW firewall to allow Nebula subnet to communicate freely (standard)
+  community.general.ufw:
+    rule: allow
+    interface: nebula1
+    comment: "Allow Nebula Network to all"
+
+- name: Open the UFW firewall to allow Nebula subnet to communicate freely (routes)
+  community.general.ufw:
+    rule: allow
+    interface: nebula1
+    route: yes
+    comment: "Allow Nebula Network to all"
