@@ -768,7 +768,7 @@ def check_for_required_value(ctx_obj, value_name, hide_input=False):
         ctx_obj[value_name.lower()] = required_value.get()
         return required_value
     else: 
-        LogHandler.debug(f'{value_name}: Value NOT FOUND in envionment variables')
+        LogHandler.debug(f'{value_name}: Value NOT FOUND in environment variables')
                 
     # Third, check the config file for the argument needed for the provider
     config_values = ctx_obj.get('config_contents', {})

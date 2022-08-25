@@ -39,7 +39,7 @@ class TerraformHandler:
         Returns return_code, stdout, stderr, and terraform_plan string of executed Terraform functions.
         """
 
-        LogHandler.info('Applying Terrafom plan')
+        LogHandler.info('Applying Terraform plan')
 
         # Check whether Terraform needs to be initialized
         if not self.working_dir.joinpath('terraform/.terraform.lock.hcl').exists():
