@@ -7,7 +7,7 @@
 
   - name: Install all requirements with pip3
     shell: | 
-      pip3 install -r {{ playbook_dir }}/../requrements.txt
+      pip3 install -r {{ playbook_dir }}/../requirements.txt
   
   - name: Install Nebula
     import_tasks: "{{ playbook_dir }}/install/install-nebula.yml"
