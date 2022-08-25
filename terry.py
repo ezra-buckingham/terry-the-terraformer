@@ -27,7 +27,7 @@ from core import *
     Auto approve the Terraform commands
     ''')
 @click.option('-f', '--force', is_flag=True, default=False, help='''
-    Force the build to go through, even if a deployment already exists with the opration name listed
+    Force the build to go through, even if a deployment already exists with the operation name listed
     ''')
 @click.option('-q', '--quiet', is_flag=True, default=False, help='''
     Don\'t send Slack messages to configuration-defined webhook URL upon infrastructure creation
@@ -103,7 +103,7 @@ def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, n
     cobaltstrike_password, cobaltstrike_malleable_c2):
     """Terry will help you with all of your Red Team infrastructure needs! He's not magic... he's Terry!"""
 
-    # Configure logging and intial logging and time stamping
+    # Configure logging and initial logging and time stamping
     logging.basicConfig(filename=log_file, filemode='a+', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
     command_run = ' '.join(sys.argv)
     LogHandler.info(f'Start of script run with command: "{command_run}"')
@@ -162,7 +162,7 @@ def destroy(ctx_obj, recursive):
         validate_credentials(check_containers=False)
         
     else:
-        LogHandler.warn('Force flag  "-f" / "--force" provided, Terry will try to destory without checking for creds / reading a manifest. THIS MAY CAUSE ERRORS!')
+        LogHandler.warn('Force flag  "-f" / "--force" provided, Terry will try to destroy without checking for creds / reading a manifest. THIS MAY CAUSE ERRORS!')
         
     # Prepare all required handlers
     prepare_core_handlers()
@@ -241,7 +241,7 @@ def create(ctx_obj):
     # Parse the build manifest, while ignoring resources if build has been forced
     parse_build_manifest(force=ctx_obj['force'])
     
-    # Load the public key so we can build the SSH key resources later
+    # Load the public key, so we can build the SSH key resources later
     public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
     
@@ -305,7 +305,7 @@ def add(ctx_obj):
     # Prepare the core handlers
     prepare_core_handlers()
 
-    # Load the public key so we can build the SSH key resources later
+    # Load the public key, so we can build the SSH key resources later
     public_key, private_key = get_operation_ssh_key_pair()
     ctx_obj['ssh_pub_key'] = public_key
     
