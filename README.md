@@ -39,5 +39,4 @@ Terry contains a few known issues. Below are some of the ones I have identified:
 
 * Adding a secrets management solution to Terry to allow for dynamic generation of secrets and automatic pushing of secrets to a secure place
 * Timeout date on infra (auto-destroy)
-* Give CIDR blocks for firewall rules
 * Scan Terraform code for vulnerabilities
