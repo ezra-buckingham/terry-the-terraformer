@@ -37,4 +37,5 @@ class SlackHandler:
             results = requests.post(self.webhook_url, payload)
             results.raise_for_status()
         except Exception as e:
-            LogHandler.error(f'Some error occured when sending Slack message: {e}')
+            LogHandler.error(f'Some error occurred when sending Slack message: {e}')
+            LogHandler.debug(f'Message that was attempted: {payload}')

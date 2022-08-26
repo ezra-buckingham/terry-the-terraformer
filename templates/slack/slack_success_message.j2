@@ -88,10 +88,14 @@
 		},
 		{% endif %}
 		{% endfor %}
+		{
+			"type": "divider"
+		},
 		{% endif %}
 		{# End parsing for the c2 section #}
 		{# End parsing for if server resource #}
-		{# Start parsing for if server resource #}
+
+		{# Start parsing for if domain resource #}
 		{% elif resource.infrastructure_type == 'domain' %}
 		{
 			"type": "header",
@@ -115,12 +119,12 @@
 				"text": ">*Records*:{% for record in resource.domain_records %}\n> - *({{ record.record_type }}):* `{{ record.subdomain }}` to `{{ record.value }}`{% endfor %}"
 			}
 		},
-		{% else %}
-
-		{% endif %}
 		{
 			"type": "divider"
 		},
+		{% endif %}
+		{# End parsing if domain resource #}
+
 		{% endfor %}
 		{# End parsing of resource #}
 
