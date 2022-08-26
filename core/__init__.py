@@ -102,14 +102,11 @@ def prepare_mailservers(ctx):
         ctx.obj['auto_approve'] = True
         
         # Create the terraform plan and build it 
-        plan = build_terraform_plan()
-        plan_file = Path(ctx.obj['op_directory']).joinpath(f'terraform/{ ctx.obj["operation"] }_plan.tf')
-        plan_file.write_text(plan)
+        build_terraform_plan(write_plan=True)
 
         # Apply the plan and map results back
         ctx.obj['terraform_handler'].apply_plan(auto_approve=ctx.obj['auto_approve'])
-        return_code, stdout, stderr = ctx.obj['terraform_handler'].show_state(json=True)
-        results = json.loads(stdout)['values']['root_module']['resources']
+        results = ctx.obj['terraform_handler'].show_state_resources(json=True)
         map_terraform_values_to_resources(results)
         
         return 
@@ -272,13 +269,16 @@ def prepare_and_run_ansible(ctx):
     ctx.obj['ansible_handler'] = AnsibleHandler(ansible_path, Path(ctx.obj['op_directory']).joinpath('ansible'), private_key)
     
     # Build the Ansible Inventory
-    LogHandler.debug('Building Ansible inventory')  
     build_ansible_inventory()
 
     # Run all the Prep playbooks
     root_playbook_location = '../../../playbooks'
     ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
+    
+    # Check if we need to clean up access from the systems
     if not ctx.command.name == 'create': ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
+    
+    # Prepare all the hosts
     ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
 
     # Run all the server-type specific playbooks
@@ -287,6 +287,26 @@ def prepare_and_run_ansible(ctx):
     ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
     ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
     ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
+    
+    # Check for additional playbooks
+    extended_plays = ctx.obj['config_contents']['ansible_configuration'].get('extended_plays', None)
+    if extended_plays:
+        LogHandler.debug('Checking for extended_plays defined in the configuration file')
+        extended_plays = extended_plays.get(ctx.command.name, None)
+        
+        # Loop over found plays
+        for play in extended_plays:
+            # Get the path and extra_vars
+            play_path = play.get('path')
+            play_vars = play.get('extra_vars')
+            
+            # Check if the play actually exists and if so, run it with extra_vars
+            if play_path:
+                if not Path(play_path).exists():
+                    LogHandler.error(f'Found extended_play at {play_path} for "{ctx.command.name}", but that file was not found on the host')
+                play_path = Path(play_path).absolute()
+                LogHandler.debug(f'Found extended_play at {play_path} for "{ctx.command.name}"')
+                ctx.obj['ansible_handler'].run_playbook(play_path, playbook_vars=play_vars)
     
     LogHandler.info('Ansible setup complete')
 
@@ -545,7 +565,7 @@ def get_server_from_uuid_or_name(ctx_obj, resource_uuid_or_name):
 
 
 @click.pass_obj
-def build_terraform_plan(ctx_obj):
+def build_terraform_plan(ctx_obj, write_plan=False):
     """Build the Terraform plan.
     Takes the Click context object dictionary.
     Returns a complete Terraform plan as a string.
@@ -567,6 +587,11 @@ def build_terraform_plan(ctx_obj):
         # Now prepare the resource
         jinja_vars = { **vars(resource), **ctx_obj }
         plan += jinja_handler.get_and_render_template(resource.terraform_resource_path, jinja_vars) + '\n\n'             
+
+    if write_plan:
+        plan_file = Path(ctx_obj['op_directory']).joinpath(f'terraform/{ ctx_obj["operation"] }_plan.tf')
+        LogHandler.debug('Writing Terraform plan to disk')
+        plan_file.write_text(plan)
 
     return plan
 
@@ -615,6 +640,8 @@ def build_ansible_inventory(ctx_obj):
 
     # We want to build a file so that ansible could be independently run outside of terry
     # as opposed to passing a dict to ansible_runner
+
+    LogHandler.debug('Building Ansible inventory')
 
     server_types = get_implemented_server_types()
     inventory = {inventory: {'hosts': {}} for inventory in server_types}

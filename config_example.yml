@@ -18,12 +18,15 @@ global:
 # ===================== Miscellaneous Configurations =====================
 ansible_configuration:
   global:
-    # Email for SSL Cert Generation
-    main_email:
+    main_email: # Email for SSL Cert Generation
   # Default users for all systems
   default_users:
     terry:
       user: terry
+      public_ip: 8.8.8.8
+      public_key: 
+    terry2:
+      user: terry2
       public_ip: 8.8.8.8
       public_key: 
   # Remote configurations in Git repositories that can be dynamically loaded into Ansible
@@ -32,6 +35,20 @@ ansible_configuration:
       repo_url:
       username:
       personal_access_token:
+  # Additional playbooks to run with each command provided
+  extended_plays:
+    create:
+      - path:
+        extra_vars:
+    add:
+      - path:
+        extra_vars:
+    destroy:
+      - path:
+        extra_vars:
+    reconfigure:
+      - path:
+        extra_vars:
 
 slack:
   # Slack Webhook to send notifications to upon completion

@@ -1,4 +1,4 @@
-from json import JSONDecodeError
+import json
 from pathlib import Path
 from python_terraform import *
 
@@ -16,10 +16,22 @@ class TerraformHandler:
         self.working_dir = Path(working_dir).joinpath('terraform')
         try:
             self.terraform = Terraform(working_dir=str(self.working_dir.absolute()), terraform_bin_path=str(self.terraform_binary.path))
-        except JSONDecodeError as e:
+        except json.JSONDecodeError as e:
             message = 'Terraform Error: There was a JSON error with the Terraform Handler, there may be a lock file that cannot be read.'
             LogHandler.critical(message)
+            
     
+    def show_state_resources(self, json=True):
+        """"""
+        
+        return_code, stdout, stderr = self.show_state(json=True)
+        
+        if not json:
+            return stdout
+        
+        results = json.loads(stdout)['values']['root_module']['resources']
+        return results
+        
 
     def show_state(self, json=True):
         """"""
