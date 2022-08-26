@@ -1,8 +1,8 @@
 ################################ WARNING ################################
-# It is NOT recomended to place credentials/keys in this file!
-# To protect sensitive material, set your HISTCONTROL env var
-# to ensure that the command isn't stored in the shell history
-# and then use the export command to pass in creds thorugh env vars.
+# It is NOT recommended to place credentials/keys in this file!
+# To protect sensitive material, set your HISTCONTROL env var to
+# ensure that the command is not stored in the shell history and
+# then use the export command to pass in creds through env vars.
 #########################################################################
 global:
   project_directory: ./deployments
