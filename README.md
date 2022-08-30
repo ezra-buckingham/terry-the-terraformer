@@ -15,6 +15,12 @@ Most documentation can be found in the [Wiki pages](https://github.com/ezra-buck
 
 Getting started is relatively easy. Follow the [Getting Started](https://github.com/ezra-buckingham/terry-the-terraformer/wiki/Getting-Started) instructions to begin using Terry.
 
+## Why this solution?
+
+If you are interested to find out how I landed on this solution, go follow my "DevAttackOps" series on my blog where I talk through each step of this solution in a blog format. 
+
+https://ezrabuckingham.com/tags/devattackops/
+
 ## Contributors / Acknowledgement
 
 I would like to thank all the people who have helped with the architecture of this project and the development of each piece. Initially, this project came to life from a co-worker, [WJDigby](https://github.com/WJDigby). He had a much cooler name for the project than Terry. And not to mention all the people in BloodHound Slack that I pestered for getting feedback on this solution. Thank you!
