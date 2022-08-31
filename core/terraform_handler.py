@@ -1,4 +1,4 @@
-import json
+from json import loads
 from pathlib import Path
 from python_terraform import *
 
@@ -29,7 +29,7 @@ class TerraformHandler:
         if not json:
             return stdout
         
-        results = json.loads(stdout)['values']['root_module']['resources']
+        results = loads(stdout)['values']['root_module']['resources']
         return results
         
 

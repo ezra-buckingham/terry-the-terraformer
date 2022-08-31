@@ -25,18 +25,30 @@ class NebulaHandler:
             # If any of the bits not set, do not use it
             if len([add for add in str(address).split('.') if add == '0']) > 0:
                 self.__assigned_ips.add(address)
-            # If the address not in assinged IP space, give it out
+            # If the address not in assigned IP space, give it out
             if address not in self.__assigned_ips:
                 self.__assigned_ips.add(address)
                 return address
         
         raise ipaddress.AddressValueError('No more IP addresses available in the subnet')
+    
+    
+    def set_assigned_ips(self, assigned_ips):
+        self.__assigned_ips = set()
         
+        for ip in assigned_ips:
+            # If None, skip it
+            if ip is None: continue
+            
+            ip = ipaddress.IPv4Address(ip)
+            self.__assigned_ips.add(ip)
+            
+    
 
     def generate_ca_certs(self):
         # Check if the certificate exists
         if self.working_dir.joinpath('ca.crt').exists():
-            LogHandler.info('Nebula root certificate found, skipping generating new certificate')
+            LogHandler.warn('Nebula root certificate found, skipping generating new certificate')
             return
         
         # Create the command and run it
@@ -55,9 +67,8 @@ class NebulaHandler:
     def generate_client_cert(self, name):
         # Check if the certificate exists
         if self.working_dir.joinpath(f'{name}.crt').exists():
-            LogHandler.info(f'Nebula host certificate found for "{name}", deleting existing and generating new certificate key pair')
-            self.working_dir.joinpath(f'{name}.crt').unlink()
-            self.working_dir.joinpath(f'{name}.key').unlink()
+            LogHandler.warn(f'Nebula host certificate found for "{name}", skipping generating new certificate key pair')
+            return
 
         # Get a new IP from the range
         new_ip = self.__get_new_ip()

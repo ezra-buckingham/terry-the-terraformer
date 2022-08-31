@@ -197,13 +197,27 @@ def configure_nebula(ctx_obj):
         LogHandler.info('Nebula not configured for this build, skipping setting up Nebula configurations and certificates')
         return
     
-    
+
     LogHandler.info('Setting up Nebula configurations and certificates')
     ctx_obj['nebula_handler'].generate_ca_certs()
     
-    for resource in [ server for server in  ctx_obj['resources'] if isinstance(server, Server) ]:
+    # First loop over all resources to get all already assigned Nebula IPs
+    already_assigned_ips = set()
+    for resource in ctx_obj['resources']:
+        if not isinstance(resource, Server): continue
+        already_assigned_ips.add(resource.nebula_ip)
+        
+    # Tell the Nebula Handler what IPs have already been assigned
+    ctx_obj['nebula_handler'].set_assigned_ips(already_assigned_ips)
+    
+    # Now loop over all resources and generate the client certs
+    for resource in ctx_obj['resources']:
+        if not isinstance(resource, Server): continue
+        
+        # Generate a certificate and if one is generated assign it, if not, there is likely an existing assigned IP / certificate
         assigned_nebula_ip = ctx_obj['nebula_handler'].generate_client_cert(resource.uuid)
-        resource.nebula_ip = assigned_nebula_ip
+        if assigned_nebula_ip:
+            resource.nebula_ip = assigned_nebula_ip
         
         if isinstance(resource, Lighthouse):
             ctx_obj['lighthouse_public_ip'] = resource.public_ip
@@ -382,6 +396,7 @@ def parse_build_manifest(ctx_obj, force=False):
 
             if resource_type == 'server':
                 resource = Server.from_dict(resource)
+                ctx_obj['existing_server_names'].add(resource.name)
             elif resource_type == 'domain':
                 resource = Domain.from_dict(resource)
                 domain_zone = f'{ resource.domain }'
@@ -471,7 +486,7 @@ def validate_credentials(ctx_obj, check_containers=True):
     
 
 @click.pass_obj
-def retreive_remote_configurations(ctx_obj):
+def retrieve_remote_configurations(ctx_obj):
     """Retreive the Ansible remote configuration definitions from the config, load them, and write them to the `ansible/extra_vars` directory
 
     Args:
@@ -659,8 +674,8 @@ def build_ansible_inventory(ctx_obj):
         global_vars["elastic"] = not ctx_obj['no_elastic']
         # If installing Nebula, give the additional vars needed for configuring it on the hosts
         if global_vars["nebula"]:
-            global_vars["lighthouse_public_ip"] = ctx_obj['lighthouse_public_ip']
-            global_vars["lighthouse_nebula_ip"] = ctx_obj['lighthouse_nebula_ip']
+            global_vars["lighthouse_public_ip"] = ctx_obj.get('lighthouse_public_ip')
+            global_vars["lighthouse_nebula_ip"] = ctx_obj.get('lighthouse_nebula_ip')
 
         # Give Ansible the default users from the configuration file
         default_users = ctx_obj["config_contents"]["ansible_configuration"]["default_users"]

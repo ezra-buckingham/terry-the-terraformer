@@ -225,7 +225,7 @@ def create(ctx_obj):
         key_file.write_bytes(private_key)
         os.chmod(str(key_file), 0o700)
 
-        retreive_remote_configurations()
+        retrieve_remote_configurations()
         create_build_manifest()
 
     # If the directory exists, we must check the flags supplied to see what Terry should do
@@ -261,18 +261,20 @@ def build_infrastructure(ctx, resources):
 
     # Apply the plan and map results back
     ctx.obj['terraform_handler'].apply_plan(auto_approve=ctx.obj['auto_approve'])
-    LogHandler.info('Terraform apply successful!')
-    return_code, stdout, stderr = ctx.obj['terraform_handler'].show_state(json=True)
-    results = json.loads(stdout)['values']['root_module']['resources']
+    results = ctx.obj['terraform_handler'].show_state_resources(json=True)
     map_terraform_values_to_resources(results)
-
-    # Configure Nebula
+    
+    # Create the build manifest and Ansible inventory now (just in case anything below throws an error)
+    create_build_manifest()
+    build_ansible_inventory()
+    
+    # Configure Nebula (needs to be done after to get public IP of lighthouse)
     configure_nebula()
     
     # Configure Redirectors
     # TODO configure_redirectors()
 
-    # Create the build manifest and run Ansible
+    # Recreate the build manifest and run Ansible
     create_build_manifest()
     prepare_and_run_ansible()
     
@@ -338,9 +340,7 @@ def refresh(ctx_obj):
     map_terraform_values_to_resources(results)
 
     # Write the refreshed data back to the manifest
-    create_build_manifest(full_replace=True)
-
-    ctx_obj['slack_handler'].send_success(ctx_obj)
+    create_build_manifest()
 
     LogHandler.info('Terry refresh complete! Refreshing, huh?')
     
@@ -365,7 +365,7 @@ def reconfigure(ctx_obj):
     validate_credentials(check_containers=True)
 
     # Retrieve any remote configuration files
-    retreive_remote_configurations()
+    retrieve_remote_configurations()
 
     # Prepare the Inventory file and run Ansible
     prepare_and_run_ansible()
