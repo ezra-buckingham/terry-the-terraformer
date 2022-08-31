@@ -24,11 +24,11 @@ ansible_configuration:
     terry:
       user: terry
       public_ip: 8.8.8.8
-      public_key: 
+      public_key: # Either public key value or path to the public key file
     terry2:
       user: terry2
       public_ip: 8.8.8.8
-      public_key: 
+      public_key: # Either public key value or path to the public key file
   # Remote configurations in Git repositories that can be dynamically loaded into Ansible
   remote:
     - name:

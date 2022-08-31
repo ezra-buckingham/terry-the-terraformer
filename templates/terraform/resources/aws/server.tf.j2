@@ -12,7 +12,7 @@ resource "aws_security_group" "sec-group-{{ uuid }}" {
   vpc_id = aws_default_vpc.vpc-{{ uuid }}.id
 
   ingress {
-    description = "SSH all"
+    description = "ALL INGRESS"
     from_port = 0
     to_port = 0
     protocol = "-1"
@@ -21,6 +21,7 @@ resource "aws_security_group" "sec-group-{{ uuid }}" {
   }
 
   egress {
+    description = "ALL EGRESS"
     from_port = 0
     to_port = 0
     protocol = "-1"

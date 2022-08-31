@@ -11,7 +11,8 @@
 		{
 			"type": "divider"
 		},
-    {% for resource in resources %}
+    	
+		{% for resource in resources %}
 		{# Start parsing for if server resource #}
 		{% if resource.infrastructure_type == 'server' %}
 		{
