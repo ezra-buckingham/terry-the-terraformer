@@ -10,15 +10,30 @@
       name: terryites
       state: present
 
-  - name: Set the hostname of the server to be the domain name (if set)
-    ansible.builtin.hostname:
-      name: "{{ domain }}"
+  
+
+  - name: Set the new_hostname fact (when domain is set)
+    set_fact:
+      new_hostname: "{{ domain }}"
     when: domain is defined
 
-  - name: Set the hostname of the server to be the resource name (when domain not set)
-    ansible.builtin.hostname:
-      name: "{{ name }}"
+  - name: Set the new_hostname fact (when domain not set)
+    set_fact:
+      new_hostname: "{{ name }}"
     when: domain is undefined
+
+  - name: Set the hostname of the server to new_hostname
+    ansible.builtin.hostname:
+      name: "{{ new_hostname }}"
+
+  - name: Replace a localhost entry with our own
+    ansible.builtin.lineinfile:
+      path: /etc/hosts
+      regexp: '^127\.0\.0\.1 localhost$'
+      line: "127.0.0.1 localhost\n127.0.0.1 {{ new_hostname }}"
+      owner: root
+      group: root
+      mode: '0644'
 
   - name: Add the team as users to server
     ansible.builtin.user:
