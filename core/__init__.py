@@ -710,7 +710,7 @@ def map_domain_to_server_value(domain: Domain, server: Server):
 
 
 def generate_random_name():
-    """Helper function to create 2 random words from `/usr/share/dict/words` to make a name (words limited to 8 characters each)
+    """Helper function to create 2 random words from the copy of `/usr/share/dict/words` in this repo to make a name (words limited to 8 characters each)
     
     Args:
         `None`
