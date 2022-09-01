@@ -846,7 +846,13 @@ def remove_directory_recursively(path):
             child.unlink()
         else:
             remove_directory_recursively(child)
-    path.rmdir()
+    # In some cases a "file" will not return True on path.is_file()
+    # (Typically any ssh_key_data files from Ansible)
+    # This is unexplainable, but catch-able using this block
+    try:
+        path.rmdir()
+    except NotADirectoryError:
+        path.unlink()
 
 
 def get_files_from_directory(dir):
