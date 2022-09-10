@@ -7,15 +7,16 @@
     state: present
 
 - name: Get the Elastic GPG Key
-  shell: |
-    curl -fsSL  https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
+  ansible.builtin.apt_key:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    state: present
 
 - name: Add the Elastic repository
   ansible.builtin.apt_repository:
     repo: "deb https://artifacts.elastic.co/packages/8.x/apt stable main"
     state: present
 
-- name: Index the new repository into the cache
+- name: Index the new Elastic repository into the cache
   ansible.builtin.apt:
     name: logstash
     state: present

@@ -39,27 +39,28 @@
     shell: |
       newaliases
 
-  # - name: Install Certbot 
-  #   include_tasks: '{{ playbook_dir }}/install/install-certbot.yml'
+  - name: Install Certbot 
+    include_tasks: '{{ playbook_dir }}/install/install-certbot.yml'
 
-  # - name: Allow SSL verification in the Firewall
-  #   shell: |
-  #     ufw allow 80
+  - name: Allow SSL verification in the Firewall
+    shell: |
+      ufw allow 80
       
-  # - name: Enable and Start UFW
-  #   community.general.ufw:
-  #     state: enabled
+  - name: Enable and Start UFW
+    community.general.ufw:
+      state: enabled
   
-  # - name: Request the SSL cert for the domain
-  #   shell: |
-  #     certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ domain }} 
+  - name: Request the SSL cert for the domain
+    shell: |
+      certbot certonly --no-eff-email --standalone --rsa-key-size 4096 --agree-tos -m {{ main_email }} --preferred-challenges http -n -d {{ domain }} 
 
-  # - name: Close the Firewall 
-  #   shell: |
-  #     ufw deny 80
+  - name: Close the Firewall 
+    shell: |
+      ufw deny 80
 
-  # - name: Enforce firewall rules
-  #   include_tasks: "{{ playbook_dir }}/core/enforce-firewall-rules.yml"
+  - name: Enable and start UFW
+    community.general.ufw:
+      state: enabled
 
   - name: Deploy the Postfix configuration template
     ansible.builtin.template:
@@ -140,11 +141,6 @@
       name: postfix
       enabled: true
       state: restarted
-
-  # - name: Restart PostFix and OpenDKIM 
-  #   shell: |
-  #     systemctl stop opendkim postfix
-  #     systemctl enable opendkim postfix --now
 
   - name: Make the Postfix group own the OpenDKIM socket
     ansible.builtin.file:

@@ -8,6 +8,7 @@ StandardOutput=syslog
 StandardError=syslog
 WorkingDirectory=/opt/nebula
 ExecStart=/opt/nebula/nebula -config config.yaml
+ExecReload=kill -HUP $MAINPID
 
 [Install]
 WantedBy=multi-user.target

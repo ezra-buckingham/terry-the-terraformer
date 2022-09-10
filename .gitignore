@@ -9,6 +9,9 @@ deployments/*
 # Ignore log files
 *.log
 
+# Ignore all custom playbooks
+playbooks/custom/*.yml
+
 # Ignore stupid DS_Store
 .DS_Store
 

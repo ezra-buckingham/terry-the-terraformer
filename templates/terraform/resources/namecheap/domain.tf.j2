@@ -1,14 +1,55 @@
+{#
+  Namecheap is IP Restricted from the API, you will need to set your IP in the console.
+  Also, when creating MX records, the `email_type` must be set accordingly to reflect that.
+
+  Errors Encountered:
+
+  **ERROR**
+  resource "namecheap_domain_records" "mx-MX-id-f746ec40-6373-4be8-b68c-037fdeabd45d" { 
+    domain = "example.com" 
+    mode = "MERGE"
+    email_type = "MX"
+  
+    record {
+      hostname = "mx"
+      type = "MX" 
+      address = "10 mx.example.com" 
+    }
+  }
+  Error: INVALID_ADDR : '10 mx.example.com' should not be an IP/ URL for MX record.(host name: mx) (2050900)
+
+  **ERROR**
+  resource "namecheap_domain_records" "_dmarc-mx-TXT-id-f746ec40-6373-4be8-b68c-037fdeabd45d" { 
+    domain = "example.com" 
+    mode = "MERGE"
+    email_type = "MX"
+  
+    record {
+      hostname = "_dmarc.mx"
+      type = "TXT" 
+      address = "v=DMARC1; p=none"
+    }
+  }
+  Error: minimum 1 MX record required for MX EmailType
+
+#}
 
 {% for record in domain_records %}
-resource "namecheap_domain_records" "{{ record.safe_subdomain }}-{{ record.record_type }}-{{ uuid }}" { # Value provided by Jinja
-  domain = "{{ domain }}" # Value provided by Jinja
+resource "namecheap_domain_records" "{{ record.safe_subdomain }}-{{ record.record_type }}-{{ uuid }}" { 
+  domain = "{{ domain }}"
   mode = "MERGE"
-  email_type = "NONE"
+  email_type = "MX"
+  {# email_type = "{% if record.record_type == "MX" %}MX{% else %}NONE{% endif %}" #}
 
   record {
-    hostname = "{% if record.subdomain|length == 0 %}.{% else %}{{ record.subdomain }}{% endif %}" # Value provided by Jinja
-    type = "{{ record.record_type }}" # Value provided by Jinja
-    address = {{ record.value }} # Value provided by Jinja
+    hostname = "{% if record.subdomain|length == 0 %}.{% else %}{{ record.subdomain }}{% endif %}" 
+    type = "{{ record.record_type }}" 
+    {% if record.record_type == "MX" %}
+    address = "{{ record.value.split(' ') | last | replace('"', '') }}."
+    mx_pref = {{ record.value.split(' ') | first | replace('"', '') }}
+    {% else %}
+    address = {{ record.value }}
+    {% endif %}
   }
 }
 {% endfor %}

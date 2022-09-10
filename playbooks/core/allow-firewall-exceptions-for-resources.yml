@@ -1,0 +1,22 @@
+
+- name: "UFW Allow all resources to communicate with each other"
+  community.general.ufw:
+    rule: allow
+    from: "{{ resource }}"
+    comment: "Allow {{ resource }} -> {{ inventory_hostname }}"
+  loop: "{{ groups['all'] }}"
+  loop_control:
+    loop_var: "resource"
+    label: "{{ resource }} allow -> {{ inventory_hostname }}"
+
+- name: "UFW Allow Route all resources to communicate with each other"
+  community.general.ufw:
+    route: yes
+    rule: allow
+    from: "{{ resource }}"
+    comment: "Allow route {{ resource }} -> {{ inventory_hostname }}"
+  loop: "{{ groups['all'] }}"
+  loop_control:
+    loop_var: "resource"
+    label: "{{ resource }} allow -> {{ inventory_hostname }} (route)"
+

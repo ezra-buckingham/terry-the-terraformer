@@ -162,7 +162,7 @@ def destroy(ctx_obj, recursive):
         validate_credentials(check_containers=False)
         
     else:
-        LogHandler.warn('Force flag  "-f" / "--force" provided, Terry will try to destroy without checking for creds / reading a manifest. THIS MAY CAUSE ERRORS!')
+        LogHandler.warn('Force flag  "-f" / "--force" provided, Terry will try to destroy without checking for credentials / reading a manifest. THIS MAY CAUSE ERRORS!')
         
     # Prepare all required handlers
     prepare_core_handlers()
@@ -176,12 +176,12 @@ def destroy(ctx_obj, recursive):
         else:
             LogHandler.warn('No Terraform state was found, so no destruction to perform')
         if recursive:
-            if Path(ctx_obj['op_directory']).exists():
-                LogHandler.warn(f'Destroying all files associated with "{ ctx_obj["operation"] }"')
-                remove_directory_recursively(ctx_obj["op_directory"])
-                LogHandler.info('File destruction complete!')
-            else:
+            if not Path(ctx_obj['op_directory']).exists():
                 LogHandler.critical(f'No files or folder found for "{ ctx_obj["operation"] }"')
+                
+            LogHandler.warn(f'Destroying all files associated with "{ ctx_obj["operation"] }"')
+            remove_directory_recursively(ctx_obj["op_directory"])
+            LogHandler.info('File destruction complete!')
         else:
             LogHandler.warn('Leaving all build files intact. If you wish to destroy them, use the "-r" / "--recursive" flag')
     else:
@@ -272,14 +272,14 @@ def build_infrastructure(ctx, resources):
     configure_nebula()
     
     # Configure Redirectors
-    # TODO configure_redirectors()
+    configure_redirectors()
 
     # Recreate the build manifest and run Ansible
     create_build_manifest()
     prepare_and_run_ansible()
     
-    # Now we need to check for Mailservers, to see if additional DNS entries are required
-    prepare_mailservers()
+    # Now we need to check for mail servers, to see if additional DNS entries are required
+    prepare_mail_servers()
         
     # Holy shit, we are done! We made it this whole way without any critical errors, that is sick
     ctx.obj['end_time'] = get_formatted_time()
@@ -366,6 +366,9 @@ def reconfigure(ctx_obj):
 
     # Retrieve any remote configuration files
     retrieve_remote_configurations()
+    
+    # Make sure redirectors are configured
+    configure_redirectors()
 
     # Prepare the Inventory file and run Ansible
     prepare_and_run_ansible()
@@ -430,6 +433,9 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, domain_to_im
         domains[domain_index] = domain_record.split(':')
         if len(domains[domain_index]) != 2: 
             LogHandler.critical(f'Domain expects be formatted as "<domain>:<registrar>" (example: "example.com:aws")')
+            
+    # Validate the domain_to_impersonate is what we expect
+    
 
     # Build the container objects & priority domain
     containers = [Container(x) for x in list(container)]
@@ -465,7 +471,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, domain_to_im
         ctx.invoke(domain, provider=main_domain[1], domain=dmarc_domain, type='TXT', value=dmarc_value)
     elif type == 'redirector':
         # First make sure we have a matching server, which will error out if not
-        # TODO if redirect_to: get_server_from_uuid_or_name(redirect_to)
+        if redirect_to: get_server_from_uuid_or_name(redirect_to)
         
         # Create the server
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)

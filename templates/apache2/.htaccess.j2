@@ -4,7 +4,7 @@ RewriteEngine On
 # Welcome to the .htaccess, to use this for reverse proxying traffic, please only comment 
 # out ONE of the examples below (exlcuding the Description, as that is just a comment).
 # 
-# Keep in mind, you may need to change the redirection rules a bit.
+# Keep in mind, you may need to change the redirection rules a bit. (Especially the port)
 #
 # If you are unsure of the rules working properly, take a look at /var/log/apache2/error.log
 #############################################################################################
@@ -13,7 +13,7 @@ RewriteEngine On
 ############ Start Basic Example Redirect Rule ############
 ## Description: Proxy all trafic to the URL below
 
-# RewriteRule ^.*$ https://{{ redirect_to }}:443%{REQUEST_URI} [P]
+RewriteRule ^.*$ https://{{ redirect_to }}:443%{REQUEST_URI} [P]
 
 ############ End Basic Example Redirect Rule ############
 
@@ -22,7 +22,7 @@ RewriteEngine On
 ## Description: If UA matches any of the below, redirect to google.com
 
 # RewriteCond %{HTTP_USER_AGENT} "wget|curl|HTTrack|crawl|google|bot|b\-o\-t|spider|baidu" [NC]
-# RewriteRule ^.*$ https://www.google.com [L,R=302]
+# RewriteRule ^.*$ https://{{ domain_to_impersonate }} [L,R=302]
 # RewriteRule ^.*$ https://{{ redirect_to }}:443%{REQUEST_URI} [P]
 
 ############ End Basic Example Redirect Rule (UA Filter) ############
@@ -33,6 +33,6 @@ RewriteEngine On
 
 # RewriteCond %{HTTP_USER_AGENT} "USER-AGENT" [NC]
 # RewriteRule ^.*$ https://{{ redirect_to }}:443%{REQUEST_URI} [P]
-# RewriteRule ^.*$ https://www.google.com [L,R=302]
+# RewriteRule ^.*$ https://{{ domain_to_impersonate }} [L,R=302]
 
 ############ End Basic Example Redirect Rule (UA Filter 2) ############

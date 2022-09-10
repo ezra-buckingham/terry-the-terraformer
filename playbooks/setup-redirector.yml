@@ -9,11 +9,16 @@
   - name: Set a dummy redirect_to if not set for the server
     set_fact:
       redirect_to: "8.8.8.8"
-    when: redirect_to is undefined or len(redirect_to) < 1
+    when: redirect_to is undefined or redirect_to | length < 1
 
   - name: Logic for HTTP Redirector
     when: redirector_type == 'https'
     block:
+
+      - name: Set a dummy domain_to_impersonate if not set for the server
+        set_fact:
+          domain_to_impersonate: "google.com"
+        when: domain_to_impersonate is undefined or domain_to_impersonate | length < 1
 
       - name: UFW Allow HTTP
         community.general.ufw:
@@ -111,7 +116,7 @@
       
       - name: Create the Service File for the DNS Redirector
         ansible.builtin.copy: 
-          src: '{{ playbook_dir }}/../templates/dns-redirector/dns-redirector.sh.j2'
+          src: '{{ playbook_dir }}/../templates/dns-redirector/dns-redirector.service.j2'
           dest: /etc/systemd/system/dns-redirector.service
 
       - name: Load, Enable, and Start the DNS Redirector service

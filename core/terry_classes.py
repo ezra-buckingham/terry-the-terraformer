@@ -104,6 +104,11 @@ class AnsibleControlledObject:
         # Check for a redirector type
         if hasattr(self, 'redirector_type') and self.redirector_type is not None:
             self_dict['redirector_type'] = self.redirector_type
+            
+        # Check for a redirect_to
+        # Check for presence of containers
+        if hasattr(self, 'redirect_to') and self.redirect_to is not None:
+            self_dict['redirect_to'] = self.redirect_to
 
         # Check for presence of containers
         if hasattr(self, 'containers') and self.containers is not None and len(self.containers) > 0:
@@ -598,8 +603,9 @@ class Categorize(Server):
 class Redirector(Server):
     """Class for Redirectors, providing obfuscation layer between internet / victim and teamserver(s)."""
 
-    def __init__(self, name, provider, domain, redirector_type, redirect_to):
+    def __init__(self, name, provider, domain, redirector_type, redirect_to, domain_to_impersonate=None):
         self.redirector_type = redirector_type
         self.redirect_to = redirect_to
+        self.domain_to_impersonate = domain_to_impersonate
 
-        Server.__init__(self, name, provider, 'redirector', domain, redirector_type=redirector_type, redirect_to=redirect_to)
+        Server.__init__(self, name, provider, 'redirector', domain, redirector_type=redirector_type, redirect_to=redirect_to, domain_to_impersonate=domain_to_impersonate)

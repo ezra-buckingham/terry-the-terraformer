@@ -1,5 +1,5 @@
 ---
-- name: Add Team Accounts, SSH Access, and UFW Firewall
+- name: Prepare All Systems with Basic Configurations
   gather_facts: true
   hosts: all
   become: true
@@ -9,8 +9,6 @@
     ansible.builtin.group:
       name: terryites
       state: present
-
-  
 
   - name: Set the new_hostname fact (when domain is set)
     set_fact:
@@ -26,7 +24,7 @@
     ansible.builtin.hostname:
       name: "{{ new_hostname }}"
 
-  - name: Replace a localhost entry with our own
+  - name: Replace the localhost entry with our new_hostname
     ansible.builtin.lineinfile:
       path: /etc/hosts
       regexp: '^127\.0\.0\.1 localhost$'
@@ -84,8 +82,12 @@
       label: "{{ item.value.user }}"
 
   - name: Install Nebula
-    import_tasks: "{{ playbook_dir }}/install/install-nebula.yml"
+    ansible.builtin.import_tasks: "{{ playbook_dir }}/install/install-nebula.yml"
     when: nebula
+
+  - name: Allow Deployed Resources to Freely Communicate (over internet, when Nebula not used)
+    ansible.builtin.import_tasks: "{{ playbook_dir }}/core/allow-firewall-exceptions-for-resources.yml"
+    when: not nebula
 
   - name: Install Filebeats
     include_tasks: '{{ playbook_dir }}/install/install-filebeat.yml'

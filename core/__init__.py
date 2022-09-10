@@ -43,7 +43,7 @@ def check_for_operation_directory(ctx_obj):
 
 
 @click.pass_context
-def prepare_mailservers(ctx):
+def prepare_mail_servers(ctx):
     """_summary_
 
     Args:
