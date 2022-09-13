@@ -23,6 +23,7 @@ from core.slack_handler import SlackHandler
 from core.environment_variable_handler import EnvironmentVariableHandler
 
 
+
 #################################################################################################################
 # Helper & Core Functions of Terry
 #################################################################################################################
@@ -238,6 +239,10 @@ def configure_redirectors(ctx_obj):
     
     for resource in ctx_obj['resources']:
         if isinstance(resource, Redirector):
+            if not resource.redirect_to: 
+                LogHandler.warn(f'Unable to automatically configure redirector: redirect_to undefined for "{resource.name}"')
+                continue
+            
             redirect_to_server = get_server_from_uuid_or_name(resource.redirect_to)
             
             if redirect_to_server.nebula_ip:
