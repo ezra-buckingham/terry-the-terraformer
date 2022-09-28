@@ -91,7 +91,7 @@ class LogHandler:
         """
 
         logger.error(message)
-        click.secho(f'[x] {message}', fg='red')
+        click.secho(f'[!] {message}', fg='red')
 
 
     @classmethod
@@ -106,5 +106,5 @@ class LogHandler:
         """
 
         logger.critical(message)
-        click.secho(f'[x] Fatal Error: {message}', fg='red', bold=True)
+        click.secho(f'[X] Fatal Error: {message}', fg='red', bold=True)
         exit(code=1)

@@ -32,14 +32,16 @@
   }
   Error: minimum 1 MX record required for MX EmailType
 
+  
+
 #}
 
 {% for record in domain_records %}
 resource "namecheap_domain_records" "{{ record.safe_subdomain }}-{{ record.record_type }}-{{ uuid }}" { 
   domain = "{{ domain }}"
   mode = "MERGE"
-  email_type = "MX"
-  {# email_type = "{% if record.record_type == "MX" %}MX{% else %}NONE{% endif %}" #}
+  {# email_type = "MX" #}
+  email_type = "{% if record.record_type == "MX" %}MX{% else %}NONE{% endif %}"
 
   record {
     hostname = "{% if record.subdomain|length == 0 %}.{% else %}{{ record.subdomain }}{% endif %}" 
