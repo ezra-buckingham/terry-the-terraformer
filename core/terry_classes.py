@@ -22,9 +22,17 @@ class TerraformObject:
         self.infrastructure_type = infrastructure_type
         self.uuid = 'id-' + (uuid if uuid else str(uuid4()))
 
+        # Set the path of the resources
         inferred_path = f'./templates/terraform/resources/{self.provider}/{self.infrastructure_type}.tf.j2'
+        inferred_override_path = f'./templates/terraform/resources/{self.provider}/{self.infrastructure_type}.override.tf.j2'
+        
         path = Path(inferred_path)
-        if path.exists():
+        path_override = Path(inferred_override_path)
+        
+        if path_override.exists():
+            LogHandler.warn(f'Found override template at "{ path_override.absolute() }", using that template instead of the original')
+            self.terraform_resource_path = path_override
+        elif path.exists():
             self.terraform_resource_path = path
         elif not error_on_missing_resource_file:
             LogHandler.warn(f'Missing Terraform Resource file for "{self.provider}/{self.infrastructure_type}", but error override provided, continuning...')

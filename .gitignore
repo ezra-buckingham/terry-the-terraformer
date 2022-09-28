@@ -3,6 +3,9 @@ config.yml
 configurations/container_mappings.yml
 configurations/terraform_mappings.yml
 
+# Ignore override files
+*.override.tf.j2
+
 # Ignore the Deployments directory
 deployments/*
 
