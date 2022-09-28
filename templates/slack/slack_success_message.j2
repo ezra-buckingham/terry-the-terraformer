@@ -13,119 +13,118 @@
 		},
     	
 		{% for resource in resources %}
-		{# Start parsing for if server resource #}
-		{% if resource.infrastructure_type == 'server' %}
-		{
-			"type": "header",
-			"text": {
-				"type": "plain_text",
-				"text": "🖥️  Server - {{ resource.server_type }}",
-				"emoji": true
-			}
-		},
-		{
-			"type": "section",
-			"fields": [
+			{# Start parsing for if server resource #}
+			{% if resource.infrastructure_type == 'server' %}
 				{
-					"type": "mrkdwn",
-					"text": "*Name*: `{{ resource.name }}` \n*Provider:* `{{ resource.provider }}`\n*Nebula IPv4:* `{{ resource.nebula_ip }}` \n*IPv4:* `{{ resource.public_ip }}` \n*Domain:* `{{ resource.domain }}`"
-				}
-			]
-		},
-		
-		{# Start parsing for the c2 section #}
-		{% if resource.containers %}
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "_*Installed Containers*_"
-			}
-		},
-		{% for container in resource.containers %}
-		{% if container.name == 'cobaltstrike' %}
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": ">Cobalt Strike"
-			}
-		},
-		{% elif container.name == 'deimos' %}
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": ">Deimos"
-			},
-			"accessory": {
-				"type": "button",
-				"text": {
-					"type": "plain_text",
-					"text": "Diemos Console 🎛️",
-					"emoji": true
+					"type": "header",
+					"text": {
+						"type": "plain_text",
+						"text": "🖥️  Server - {{ resource.server_type }}",
+						"emoji": true
+					}
 				},
-				"style": "primary",
-				"value": "deimos",
-				"url": "https://{{ resource.public_ip }}:2222",
-				"action_id": "deimos-link"
-			}
-		},
-		{% elif container.name == 'sliver' %}
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": ">Sliver: configs at `{{ resource.public_ip }}:/opt/sliver/mount/<username>.conf`"
-			}
-		},
-		{% else %}
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": ">{{ container.name }}"
-			}
-		},
-		{% endif %}
-		{% endfor %}
-		{
-			"type": "divider"
-		},
-		{% endif %}
-		{# End parsing for the c2 section #}
-		{# End parsing for if server resource #}
+				{
+					"type": "section",
+					"fields": [
+						{
+							"type": "mrkdwn",
+							"text": "*Name*: `{{ resource.name }}` \n*Provider:* `{{ resource.provider }}`\n*Nebula IPv4:* `{{ resource.nebula_ip }}` \n*IPv4:* `{{ resource.public_ip }}` \n*Domain:* `{{ resource.domain }}`"
+						}
+					]
+				},
+			
+			{# Start parsing for the c2 section #}
+			{% if resource.containers %}
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": "_*Installed Containers*_"
+					}
+				},
+				{% for container in resource.containers %}
+					{% if container.name == 'cobaltstrike' %}
+						{
+							"type": "section",
+							"text": {
+								"type": "mrkdwn",
+								"text": ">Cobalt Strike"
+							}
+						},
+					{% elif container.name == 'deimos' %}
+						{
+							"type": "section",
+							"text": {
+								"type": "mrkdwn",
+								"text": ">Deimos"
+							},
+							"accessory": {
+								"type": "button",
+								"text": {
+									"type": "plain_text",
+									"text": "Diemos Console 🎛️",
+									"emoji": true
+								},
+								"style": "primary",
+								"value": "deimos",
+								"url": "https://{{ resource.public_ip }}:2222",
+								"action_id": "deimos-link"
+							}
+						},
+					{% elif container.name == 'sliver' %}
+						{
+							"type": "section",
+							"text": {
+								"type": "mrkdwn",
+								"text": ">Sliver: configs at `{{ resource.public_ip }}:/opt/sliver/mount/<username>.conf`"
+							}
+						},
+					{% else %}
+						{
+							"type": "section",
+							"text": {
+								"type": "mrkdwn",
+								"text": ">{{ container.name }}"
+							}
+						},
+					{% endif %}
+				{% endfor %}
+			{% endif %}
+			{# End parsing for the c2 section #}
+			{
+				"type": "divider"
+			},
+			{# End parsing for if server resource #}
 
-		{# Start parsing for if domain resource #}
-		{% elif resource.infrastructure_type == 'domain' %}
-		{
-			"type": "header",
-			"text": {
-				"type": "plain_text",
-				"text": "🌎  Domain - {{ resource.domain }}",
-				"emoji": true
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-					"type": "mrkdwn",
-					"text": "*Name*: `{{ resource.root_domain }}[.]{{ resource.top_level_domain }}` \n*Provider:* `{{ resource.provider }}`"
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": ">*Records*:{% for record in resource.domain_records %}\n> - *({{ record.record_type }}):* `{{ record.subdomain }}` to `{{ record.value | replace('"', '') | replace('\', '') }}`{% endfor %}"
-			}
-		},
-		{
-			"type": "divider"
-		},
-		{% endif %}
-		{# End parsing if domain resource #}
-
+			{# Start parsing for if domain resource #}
+			{% elif resource.infrastructure_type == 'domain' %}
+				{
+					"type": "header",
+					"text": {
+						"type": "plain_text",
+						"text": "🌎  Domain - {{ resource.domain }}",
+						"emoji": true
+					}
+				},
+				{
+					"type": "section",
+					"text": {
+							"type": "mrkdwn",
+							"text": "*Name*: `{{ resource.root_domain }}[.]{{ resource.top_level_domain }}` \n*Provider:* `{{ resource.provider }}`"
+					}
+				},
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": ">*Records*:{% for record in resource.domain_records %}\n> - *({{ record.record_type }}):* `{{ record.subdomain }}` to `{{ record.value | replace('"', '') | replace('\\', '') }}`{% endfor %}"
+					}
+				},
+				{
+					"type": "divider"
+				},
+			{% endif %}
+			{# End parsing if domain resource #}
 		{% endfor %}
 		{# End parsing of resource #}
 
