@@ -709,6 +709,23 @@ def build_ansible_inventory(ctx_obj):
     return inventory
 
 
+@click.pass_context
+def display_resources(ctx):
+    """_summary_
+
+    Args:
+        ctx (_type_): _description_
+    """
+    
+    print(f'\nOperational Resources (total resources: { len(ctx.obj["resources"]) }):\n')
+    for resource in ctx.obj['resources']: 
+        resource = resource.to_dict()
+        for key in resource:
+            key_upper = key.upper()
+            print(f'{key_upper}: {resource[key]}')
+        print()
+    
+
 @click.pass_obj
 def map_domain_to_server_value(domain: Domain, server: Server):
     """"""

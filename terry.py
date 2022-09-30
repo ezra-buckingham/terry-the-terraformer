@@ -284,7 +284,11 @@ def build_infrastructure(ctx, resources):
     # Holy shit, we are done! We made it this whole way without any critical errors, that is sick
     ctx.obj['end_time'] = get_formatted_time()
     ctx.obj['slack_handler'].send_success(ctx.obj)
+    
+    # Print out the built resources
+    display_resources()
 
+    # Tell the user we are done
     LogHandler.info('Terry building complete! Enjoy the tools you tool!')
 
 
@@ -341,6 +345,9 @@ def refresh(ctx_obj):
 
     # Write the refreshed data back to the manifest
     create_build_manifest()
+    
+    # Display the resources
+    display_resources()
 
     LogHandler.info('Terry refresh complete! Refreshing, huh?')
     
@@ -372,6 +379,9 @@ def reconfigure(ctx_obj):
 
     # Prepare the Inventory file and run Ansible
     prepare_and_run_ansible()
+    
+    # Display the resources
+    display_resources()
 
     LogHandler.info('Terry reconfiguring complete!')
 
