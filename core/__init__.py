@@ -141,8 +141,8 @@ def prepare_lighthouse(ctx):
 
         # Now get the provider from the user
         provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
-        while provider not in TerraformObject.get_terraform_mappings(simple_list=True):
-            LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {TerraformObject.get_terraform_mappings(simple_list=True)}', is_fatal=False)
+        while provider not in get_terraform_mappings(simple_list=True):
+            LogHandler.error(f'Invalid provider provided: {provider}. Please enter one of the following providers: {get_terraform_mappings(simple_list=True)}', is_fatal=False)
             provider = LogHandler.get_input('What provider do you want the build the lighthouse with?')
 
         from terry import server
@@ -458,7 +458,7 @@ def validate_credentials(ctx_obj, check_containers=True):
     """Validate that we have credentials needed for the specified actions (all required providers will be given to the Click Context Object at `ctx.obj['required_providers']`)
 
     Args:
-        `check_containers (bool)`: Should we check that we have credentials to deploy containers (not needed when destorying infra)
+        `check_containers (bool)`: Should we check that we have credentials to deploy containers (not needed when destroying infra)
     Returns:
         `None`
     """
@@ -492,7 +492,7 @@ def validate_credentials(ctx_obj, check_containers=True):
 
 @click.pass_obj
 def retrieve_remote_configurations(ctx_obj):
-    """Retreive the Ansible remote configuration definitions from the config, load them, and write them to the `ansible/extra_vars` directory
+    """Retrieve the Ansible remote configuration definitions from the config, load them, and write them to the `ansible/extra_vars` directory
 
     Args:
         `None`
@@ -524,6 +524,50 @@ def retrieve_remote_configurations(ctx_obj):
     LogHandler.info('Parsing of config for remote configuration definitions complete')
 
     return ctx_obj["config_contents"]["ansible_configuration"]["remote"]
+
+
+def get_terraform_mappings(self, simple_list=False, type='all'):
+    """Get the Terraform Mapping configuration file that will be used to build and remediate differences across the various providers
+        
+    Args: 
+        `None`
+    Returns:
+        `mappings (dict)`: Dictionary containing the configuration
+    """
+
+    # Get the mappings file and read it in
+    mappings = Path('./configurations/terraform_mappings.yml').read_text()
+    mappings = yaml.safe_load(mappings)
+
+    if type == 'server':
+        mappings = dict(filter(lambda provider: 'server' in provider[1], mappings.items()))
+    elif type == 'domain':
+        mappings = dict(filter(lambda provider: provider[1]['is_registrar'], mappings.items()))
+
+    # Check if we were asked for a simple list
+    if simple_list:
+        mappings = list(mappings.keys())
+        
+    return mappings
+
+
+def get_container_mappings(self, simple_list: bool=True) -> list:
+    """Get the Container Mapping configuration file that will be used to build and deploy Docker containers
+        
+    Args: 
+        `simple_list (boolean)`: (DEFAULT=True) Return just the list of containers in the config 
+    Returns:
+        `mappings (list[str | dict])`: List containing the configuration as a dict or list
+    """
+
+    mappings = Path('./configurations/container_mappings.yml').read_text()
+    # Parse the yaml and set the proper values
+    parsed_yaml = yaml.safe_load(mappings)
+
+    if simple_list:
+        return parsed_yaml["services"].keys()
+
+    return parsed_yaml 
 
 
 @click.pass_obj
@@ -626,7 +670,7 @@ def map_terraform_values_to_resources(ctx_obj, json_data):
     LogHandler.debug('Mapping Terraform state')
 
     # Get the terraform mappings so we know what keys to search for
-    terraform_mappings = TerraformObject.get_terraform_mappings()
+    terraform_mappings = get_terraform_mappings()
 
     for resource in json_data:
         resource_values = resource['values']
@@ -731,7 +775,7 @@ def map_domain_to_server_value(domain: Domain, server: Server):
     """"""
 
 
-def generate_random_name():
+def generate_random_name() -> str:
     """Helper function to create 2 random words from the copy of `/usr/share/dict/words` in this repo to make a name (words limited to 8 characters each)
     
     Args:
@@ -758,7 +802,7 @@ def generate_random_name():
 
 
 @click.pass_obj
-def is_verbose_enabled(ctx_obj):
+def is_verbose_enabled(ctx_obj) -> bool:
     """Checks the Click Context for verbosity level being set by the CLI
     
     Args:
@@ -770,7 +814,7 @@ def is_verbose_enabled(ctx_obj):
     return ctx_obj['verbose']
 
 
-def get_formatted_time():
+def get_formatted_time() -> str:
     """Get the time formatted in 24-hr local time
 
     Args:
@@ -802,6 +846,7 @@ def find_dict_item(obj, key):
             if item is not None:
                 return item
 
+
 @click.pass_obj
 def check_for_required_value(ctx_obj, value_name, hide_input=False):
     """Will check for a specific value being an environment variable, then check the cli, then check the config file.
@@ -828,7 +873,7 @@ def check_for_required_value(ctx_obj, value_name, hide_input=False):
 
     # Second, check the env variable in case it was set manually
     if required_value.get(): 
-        LogHandler.debug(f'{value_name}: Value FOUND in envionment variables')
+        LogHandler.debug(f'{value_name}: Value FOUND in environment variables')
         ctx_obj[value_name.lower()] = required_value.get()
         return required_value
     else: 
@@ -870,7 +915,7 @@ def remove_directory_recursively(path):
             remove_directory_recursively(child)
     # In some cases a "file" will not return True on path.is_file()
     # (Typically any ssh_key_data files from Ansible)
-    # This is unexplainable, but catch-able using this block
+    # This is unexplainable, but catch-able using the following block
     try:
         path.rmdir()
     except NotADirectoryError:
@@ -955,5 +1000,4 @@ def get_common_subdomain(exclude=None):
         options.remove(subdomain)
 
     return random.choice(options)
-
 
