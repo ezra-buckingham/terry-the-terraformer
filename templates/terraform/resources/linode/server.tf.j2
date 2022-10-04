@@ -1,0 +1,15 @@
+resource "linode_instance" "{{ uuid }}" {
+    label = "{% if domain %}{{ domain }}{% else %}{{ name }}{% endif %}"
+    image = "linode/debian11"
+    region = "us-east"
+    type = "{{ terraform_size_reference }}"
+    authorized_keys = [ linode_sshkey.{{ provider }}-{{ build_uuid }}.ssh_key ]
+
+    swap_size = 256
+    private_ip = false
+
+    disk {
+        label = "dsk-{{ uuid }}"
+        size = {{ terraform_disk_size_reference }}
+    }
+}

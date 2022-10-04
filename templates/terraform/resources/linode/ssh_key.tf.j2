@@ -1,4 +1,4 @@
-resource "linode_sshkey" "foo" {
-  label = "foo"
-  ssh_key = chomp(file("~/.ssh/id_rsa.pub"))
+resource "linode_sshkey" "{{ provider }}-{{ build_uuid }}" {
+  label = "{{ provider }}-{{ build_uuid }}" # Value provided by Jinja
+  ssh_key = "{{ public_key.decode('utf-8') }}" # Value provided by Jinja
 }
