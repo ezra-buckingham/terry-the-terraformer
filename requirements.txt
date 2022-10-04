@@ -6,4 +6,5 @@ click
 jinja2
 python-terraform
 requests
+tabulate
 uuid

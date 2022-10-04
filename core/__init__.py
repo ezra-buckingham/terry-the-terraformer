@@ -1,8 +1,8 @@
 import click
-import json
 import random
 import re
 import yaml
+import tabulate
 
 from pathlib import Path
 from datetime import datetime
@@ -711,19 +711,34 @@ def build_ansible_inventory(ctx_obj):
 
 @click.pass_context
 def display_resources(ctx):
-    """_summary_
+    """Prints out the resources in a neatly formatted way
 
     Args:
         ctx (_type_): _description_
     """
     
-    print(f'\nOperational Resources (total resources: { len(ctx.obj["resources"]) }):\n')
-    for resource in ctx.obj['resources']: 
-        resource = resource.to_dict()
-        for key in resource:
-            key_upper = key.upper()
-            print(f'{key_upper}: {resource[key]}')
-        print()
+    server_table_headers = ['server_name', 'public_ip', 'nebula_ip', 'provider', 'domain']
+    servers = [ server_table_headers ]
+    
+    domain_table_headers = ['domain', 'host', 'record_type', 'value']
+    domains = [ domain_table_headers ]
+    
+    for resource in ctx.obj['resources']:
+        if isinstance(resource, Server):
+            server = [ resource.name, resource.public_ip, resource.nebula_ip, resource.provider, resource.domain ]
+            servers.append(server)
+        elif isinstance(resource, Domain):
+            for record in resource.domain_records:
+                domain = [ resource.domain, record.subdomain, record.record_type, record.value ]
+                domains.append(domain)
+    
+    print(f'\nServer Resources:\n')
+    print(tabulate.tabulate(servers, headers='firstrow', tablefmt='fancy_grid'))
+    
+    print(f'\nDomain Resources:\n')
+    print(tabulate.tabulate(domains, headers='firstrow', tablefmt='fancy_grid'))
+    print()
+    
     
 
 @click.pass_obj
