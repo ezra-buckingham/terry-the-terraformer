@@ -24,3 +24,6 @@ playbooks/custom/*.yml
 # Ignore vscode
 .vscode
 .vscode/*
+
+# Ignore pycache
+__pycache__

@@ -1,15 +1,26 @@
+resource "linode_instance_config" "config-{{ uuid }}" {
+    linode_id = linode_instance.{{ uuid }}.id
+    label = "config-{{ uuid }}"
+  
+    devices {
+        sda {
+            disk_id = linode_instance_disk.disk-{{ uuid }}.id
+        }
+    }
+  
+    booted = true
+}
+  
+resource "linode_instance_disk" "disk-{{ uuid }}" {
+    label = "boot"
+    linode_id = linode_instance.{{ uuid }}.id
+    size = {{ terraform_disk_size_reference * 100 }} {# Disk size is in MB #}
+    image = "linode/debian11"
+    authorized_keys = [ linode_sshkey.{{ provider }}-{{ build_uuid }}.ssh_key ]
+}
+  
 resource "linode_instance" "{{ uuid }}" {
     label = "{% if domain %}{{ domain }}{% else %}{{ name }}{% endif %}"
-    image = "linode/debian11"
-    region = "us-east"
     type = "{{ terraform_size_reference }}"
-    authorized_keys = [ linode_sshkey.{{ provider }}-{{ build_uuid }}.ssh_key ]
-
-    swap_size = 256
-    private_ip = false
-
-    disk {
-        label = "dsk-{{ uuid }}"
-        size = {{ terraform_disk_size_reference }}
-    }
+    region = "us-east"
 }
