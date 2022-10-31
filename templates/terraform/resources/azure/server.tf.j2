@@ -1,33 +1,109 @@
-resource "azurerm_virtual_machine" "main" {
-  name                  = "${var.prefix}-vm"
-  location              = azurerm_resource_group.main.location
-  resource_group_name   = azurerm_resource_group.main.name
-  network_interface_ids = [azurerm_network_interface.main.id]
-  vm_size               = "Standard_DS1_v2"
+{# Create the network VNET #}
+resource "azurerm_virtual_network" "network-vnet-{{ uuid }}" {
+  name = "network-vnet-{{ uuid }}"
+  address_space = [ "10.36.0.1/24" ]
+  resource_group_name = azurerm_resource_group.rg-{{ build_uuid }}.name
+  location = azurerm_resource_group.rg-{{ build_uuid }}.location
+}
+
+{# Create the VM subnet #}
+resource "azurerm_subnet" "vm-subnet-{{ uuid }}" {
+  name = "vm-subnet-{{ uuuid }}"
+  address_prefixes = [ "10.0.0.1/24" ]
+  virtual_network_name = azurerm_virtual_network.network-vnet-{{ uuid }}.name
+  resource_group_name = azurerm_resource_group.rg-{{ build_uuid }}.name
+}
+
+{# Create the Security group rules to allow for all open #}
+resource "azurerm_network_security_group" "sec-group-{{ uuid }}" {
+
+  location = azurerm_resource_group.rg-{{ build_uuid }}.location
+  resource_group_name = azurerm_resource_group.rg-{{ build_uuid }}.name
+  
+  security_rule {
+    name = "AllowAllTCP"
+    description = "Allow All TCP"
+    priority = 100
+    direction = "Inbound"
+    access = "Allow"
+    protocol = "Tcp"
+    source_port_range = "*"
+    destination_port_range = "*"
+    source_address_prefix = "Internet"
+    destination_address_prefix = "*"
+  }
+  
+  security_rule {
+    name = "AllowAllUDP"
+    description = "Allow All UDP"
+    priority = 150
+    direction = "Inbound"
+    access = "Allow"
+    protocol = "Udp"
+    source_port_range = "*"
+    destination_port_range = "*"
+    source_address_prefix = "Internet"
+    destination_address_prefix = "*"
+  }
+}
+
+{# Associate the Security Group with the subnet #}
+resource "azurerm_subnet_network_security_group_association" "nsg-assoc-{{ uuid }}" {
+  subnet_id = azurerm_subnet.vm-subnet-{{ uuuid }}.id
+  network_security_group_id = azurerm_network_security_group.sec-group-{{ uuid }}.id
+}
+
+{# Get static IP for the VM #}
+resource "azurerm_public_ip" "vm-static-ip-{{ uuid }}" {
+  name = "vm-static-ip-{{ uuid }}"
+  location = azurerm_resource_group.rg-{{ build_uuid }}.location
+  resource_group_name = azurerm_resource_group.rg-{{ build_uuid }}.name
+  allocation_method = "Static"
+}
+
+{# Create a NIC for the vm #}
+resource "azurerm_network_interface" "vm-nic-{{ uuid }}" {
+  name = "vm-nic-{{ uuid }}"
+  location = azurerm_resource_group.rg-{{ build_uuid }}.location
+  resource_group_name = azurerm_resource_group.rg-{{ build_uuid }}.name
+  
+  ip_configuration {
+    name = "internal"
+    subnet_id = azurerm_subnet.vm-subnet-{{ uuid }}.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id = azurerm_public_ip.vm-static-ip-{{ uuid }}.id
+  }
+}
+
+{# Finally create the VM #}
+resource "azurerm_virtual_machine" "{{ uuid }}" {
+  name = "{% if domain %}{{ domain }}{% else %}{{ name }}{% endif %}"
+  location = azurerm_resource_group.rg-{{ build_uuid }}.location
+  resource_group_name = azurerm_resource_group.rg-{{ build_uuid }}.name
+  network_interface_ids = [ azurerm_network_interface.vm-nic-{{ uuid }}.id ]
+  vm_size = "Standard_DS1_v2"
 
   delete_data_disks_on_termination = true
 
   storage_image_reference {
-    publisher = "Canonical"
-    offer     = "UbuntuServer"
-    sku       = "16.04-LTS"
-    version   = "latest"
+    publisher = "Debian"
+    offer = "debian-11"
+    sku = "11"
+    version = "latest"
   }
 
   storage_os_disk {
-    name              = "myosdisk1"
-    caching           = "ReadWrite"
-    create_option     = "FromImage"
+    name = "dsk-{{ uuid }}"
+    caching = "ReadWrite"
+    create_option = "FromImage"
     managed_disk_type = "Standard_LRS"
   }
 
   os_profile_linux_config {
     disable_password_authentication = true
-    ssh_keys: 
   }
 
   tags = {
-    name = "staging"
-    Name = ""
+    operation = "{{ safe_operation_name }}"
   }
 }

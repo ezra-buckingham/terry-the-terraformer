@@ -600,6 +600,17 @@ def build_terraform_plan(ctx_obj, write_plan=False):
 
     # Start with adding the providers
     plan += jinja_handler.get_and_render_template('./templates/terraform/provider.tf.j2', {'required_providers' : ctx_obj['required_providers']})+ '\n\n'
+    
+    # Loop over the required providers and see if there is a _base.tf.j2 we need to load
+    for provider in ctx_obj['required_providers']:
+        base_template_path = f'./templates/terraform/resources/{ provider.name }/_base.tf.j2'
+        
+        if not Path(base_template_path).exists(): 
+            LogHandler.debug(f'No _base.tf.j2 found for "{ provider.name }", skipping')
+            continue
+        
+        LogHandler.debug(f'Found _base.tf.j2 found for "{ provider.name }", adding that to build')
+        plan += jinja_handler.get_and_render_template(base_template_path, ctx_obj) + '\n\n'
         
     # Now prepare it all
     for resource in ctx_obj["resources"]:
