@@ -728,7 +728,7 @@ def display_resources(ctx):
         ctx (_type_): _description_
     """
     
-    server_table_headers = ['server_name', 'public_ip', 'nebula_ip', 'provider', 'domain']
+    server_table_headers = ['server_name', 'server_type', 'public_ip', 'nebula_ip', 'provider', 'domain']
     servers = [ server_table_headers ]
     
     domain_table_headers = ['domain', 'host', 'record_type', 'value']
@@ -736,7 +736,7 @@ def display_resources(ctx):
     
     for resource in ctx.obj['resources']:
         if isinstance(resource, Server):
-            server = [ resource.name, resource.public_ip, resource.nebula_ip, resource.provider, resource.domain ]
+            server = [ resource.name, resource.server_type, resource.public_ip, resource.nebula_ip, resource.provider, resource.domain ]
             servers.append(server)
         elif isinstance(resource, Domain):
             for record in resource.domain_records:
