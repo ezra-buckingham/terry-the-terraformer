@@ -1,16 +1,17 @@
 from abc import ABC, abstractmethod
 import base64
 import hashlib
+from typing import List
 import yaml
 from pathlib import Path
 from uuid import uuid4
 
-
 from core.log_handler import LogHandler
-
+        
 
 class ISerializable(ABC):
-    """Base class for representing a serializable resource"""
+    """Base class for representing a serializable resource
+    """
 
     def __init__(self):
         pass
@@ -25,9 +26,66 @@ class ISerializable(ABC):
         pass
 
 
+class SerializableProp:
+    """_summary_
+    """    
+    
+    value: object
+    ansible: bool
+    terraform: bool
+    manifest: bool
+    
+    def __init__(self, value: object, ansible: bool, terraform: bool, manifest: bool):
+        """_summary_
+
+        Args:
+            value (object): _description_
+            ansible (bool): _description_
+            terraform (bool): _description_
+            manifest (bool): _description_
+        """
+        
+        
+        self.value = value
+        self.ansible = ansible
+        self.terraform = terraform
+        self.manifest = manifest
+    
+    def __str__(self) -> str:
+        """_summary_
+
+        Returns:
+            str: _description_
+        """
+        
+        
+        return str(self.value)
+      
+
 #################################################################################################################
-# Parent Terraform, Ansible, and Container Classes
-#################################################################################################################
+# Parent Build, Terraform, Ansible, and Container Classes
+#################################################################################################################  
+
+class Build:
+    """"""
+    
+    start_time: str
+    command_run: str
+    project_directory: Path
+    op_directory: Path
+    config: Path
+    config_contents: dict
+    operation_name: str
+    resources: List[object]
+    
+    existing_server_names: List[str]
+    required_providers: set[str]
+    required_ssh_keys: set[str]
+    required_domains: set[str]
+  
+    def __init__(self):
+        """"""
+
 
 class TerraformObject:
     """Base class for all things Terraform"""
