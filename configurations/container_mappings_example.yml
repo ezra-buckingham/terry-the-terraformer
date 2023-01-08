@@ -4,7 +4,8 @@
 # "pre_run_commands", and "post_run_commands" which all MUST be blank if there is nothing to 
 # run / no required args. The "required_args" are the required arguments to run the container
 # If you have tasks you need to run, they should be VALID Ansible tasks and all Jinja templates
-# MUST be escaped with [[ ]] in order to work. 
+# MUST be escaped with [[ ]] in order to work. This is due to nested references. Ansible "defaults"
+# would not work given you are nesting data using loops :) 
 
 # NOTE: Jinja values that are NOT escaped are populated by Ansible at playbook init and if
 # there are undefined values, Ansible will throw an error. That is important since inside of
