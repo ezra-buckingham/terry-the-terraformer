@@ -1,0 +1,23 @@
+# If the strategy is to use AWS ECR, login using the AWS CLI
+- name: AWS Strategy
+  when: container_strategy == 'aws'
+  block:
+
+  - name: Extract the AWS Account ID and Region from ECR URL
+    set_fact:
+      aws_account_id: "{{ lookup('env', 'CONTAINER_REGISTRY') | split('.') | first }}"
+      aws_ecr_region: "{{ lookup('env', 'CONTAINER_REGISTRY') | split('.')[3] }}"
+
+  - name: Authenticate to the container registry (aws strategy)
+    shell: "aws ecr get-login-password --region {{ aws_ecr_region }} | docker login --username AWS --password-stdin {{ lookup('env', 'CONTAINER_REGISTRY') }}"
+    
+# If the strategy is default, just use the docker login plugin
+- name: Default Strategy
+  when: container_strategy == 'default'
+  block:
+
+  - name: Authenticate to the container registry (default strategy)
+    community.docker.docker_login:
+      registry: "{{ lookup('env', 'CONTAINER_REGISTRY') }}"
+      username: "{{ lookup('env', 'CONTAINER_REGISTRY_USERNAME') }}"
+      password: "{{ lookup('env', 'CONTAINER_REGISTRY_PASSWORD') }}"

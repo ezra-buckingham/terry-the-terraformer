@@ -94,13 +94,10 @@
         dest: '/opt/container/docker-compose.yml'
 
     - name: Authenticate to the container registry
-      community.docker.docker_login:
-        registry: "{{ lookup('env', 'CONTAINER_REGISTRY') }}"
-        username: "{{ lookup('env', 'CONTAINER_REGISTRY_USERNAME') }}"
-        password: "{{ lookup('env', 'CONTAINER_REGISTRY_PASSWORD') }}"
+      ansible.builtin.include_tasks: '{{ playbook_dir }}/core/login-to-container-registry.yml'
     
     - name: Run the pre_run_commands for each container
-      include_tasks:
+      ansible.builtin.include_tasks:
         file: "{{ op_directory }}/ansible/extra_tasks/{{ inventory_hostname }}_{{ item.container_name }}-pre_run_commands.yml"
       loop: "{{ docker_services }}"
       loop_control:

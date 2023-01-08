@@ -13,6 +13,7 @@ global:
   container_registry:
   container_registry_username:
   container_registry_password: 
+  container_strategy: default # If using AWS ECR, specify "aws" and then  
 
 
 # ===================== Miscellaneous Configurations =====================
@@ -35,6 +36,7 @@ ansible_configuration:
       repo_url:
       username:
       personal_access_token:
+      is_package: true
   # Additional playbooks to run with each command provided
   extended_plays:
     create:
@@ -58,6 +60,7 @@ elastic:
   # FQDN or IP address of Elastic Server (must be on internet and accessible) formatted as 'server.elastic.com' or '8.8.8.8'
   elastic_server:
   elastic_api_key: 
+
 
 # ===================== Cloud Configurations =====================
 aws:

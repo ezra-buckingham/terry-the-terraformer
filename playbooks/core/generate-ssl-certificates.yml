@@ -13,6 +13,7 @@
 - name: Run Certbot for the domain
   shell: |
     certbot --apache --no-eff-email --agree-tos -m {{ main_email }} -n -d {{ domain }}
+  ignore_errors: true
 
 - name: Enable and restart Apache2
   ansible.builtin.service:
