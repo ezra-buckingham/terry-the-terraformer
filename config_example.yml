@@ -10,10 +10,10 @@ global:
   ansible_path: 
   nebula_path: 
   nebula_subnet: 10.36.36.0/24
-  container_registry:
-  container_registry_username:
-  container_registry_password: 
-  container_strategy: default # If using AWS ECR, specify "aws" and then  
+  container_registry: 
+  container_registry_username: # If using AWS ECR, specify your AWS username
+  container_registry_password: # If using AWS ECR, specify your "<AWS_SECRET_KEY_ID>~<AWS_SECRET_ACCESS_KEY>" where everything in the <> is replaced and them delimited by a tilde "~" character
+  container_registry_strategy: default # If using AWS ECR, specify "aws"
 
 
 # ===================== Miscellaneous Configurations =====================

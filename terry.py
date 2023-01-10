@@ -53,6 +53,9 @@ from core import *
 @click.option('-cRP', '--container_registry_password', help='''
     Password used to authenticate to the container registry (required if deploying containers)
     ''')
+@click.option('-cRS', '--container_registry_strategy', default='default', help='''
+    Strategy to use for container registry auth (use "aws" when using AWS ECR or "default" for standard username / password auth)
+    ''')
 @click.option('-eS', '--elastic_server', help='''
     Elasticsearch public IP address or FQDN (for centralized logging) and port
     ''')
@@ -94,7 +97,7 @@ from core import *
     ''')
 @click.pass_context
 def cli(ctx, config, operation, auto_approve, force, quiet, verbose, log_file, no_nebula, no_elastic,
-    container_registry, container_registry_username, container_registry_password, 
+    container_registry, container_registry_username, container_registry_password, container_registry_strategy,
     elastic_server, elastic_api_key,
     aws_access_key_id, aws_secret_access_key, aws_default_region, 
     digital_ocean_token, 

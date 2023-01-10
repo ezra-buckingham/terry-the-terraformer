@@ -688,6 +688,7 @@ def build_ansible_inventory(ctx_obj):
         global_vars["op_directory"] = str(ctx_obj["op_directory"].resolve())
         global_vars["nebula"] = not ctx_obj['no_nebula']
         global_vars["elastic"] = not ctx_obj['no_elastic']
+        global_vars["container_registry_strategy"] = ctx_obj["container_registry_strategy"]
         # If installing Nebula, give the additional vars needed for configuring it on the hosts
         if global_vars["nebula"]:
             global_vars["lighthouse_public_ip"] = ctx_obj.get('lighthouse_public_ip')
