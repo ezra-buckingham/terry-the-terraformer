@@ -1,31 +1,28 @@
 - name: Install package dependencies
   package: name={{ item }} state=present
   with_items:
-    - python
+    - python3
+    - python3-venv
     - unzip
 
 - name: Download the awscli bundle
   get_url: url=https://s3.amazonaws.com/aws-cli/awscli-bundle.zip dest=/tmp/awscli-bundle.zip
-  register: aws_cli_download_bundle
 
-- name: Unarchive the installer.
+- name: Unarchive the awscli installer
   unarchive: src=/tmp/awscli-bundle.zip dest=/tmp copy=no creates=/tmp/awscli-bundle
-  when: aws_cli_download_bundle.changed
-  register: aws_cli_unarchive_installer
 
 - name: Install awscli package
-  shell: python /tmp/awscli-bundle/install -i /usr/local/aws -b /usr/bin/aws
+  shell: python3 /tmp/awscli-bundle/install -i /usr/local/aws -b /usr/bin/aws
   args:
     creates: /usr/bin/aws
-  when: aws_cli_unarchive_installer.changed
 
-- name: Configure AWS
-  shell: aws configure set {{ item.key }} {{ item.value }} --profile {{ aws_profile }}
-  no_log: True
-  with_dict:
-    aws_access_key_id: "{{ aws_access_key }}"
-    aws_secret_access_key: "{{ aws_secret_key }}"
-    region: "{{ aws_region }}"
-    format: "{{ aws_format }}"
-  become_user: "{{ aws_system_user }}"
-  changed_when: false
+# - name: Configure AWS
+#   shell: aws configure set {{ item.key }} {{ item.value }} --profile {{ aws_profile }}
+#   no_log: True
+#   with_dict:
+#     aws_access_key_id: "{{ aws_access_key }}"
+#     aws_secret_access_key: "{{ aws_secret_key }}"
+#     region: "{{ aws_region }}"
+#     format: "{{ aws_format }}"
+#   become_user: "{{ aws_system_user }}"
+#   changed_when: false

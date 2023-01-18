@@ -3,6 +3,9 @@
   when: container_registry_strategy == 'aws'
   block:
 
+  - name: Install the AWS CLI
+    include_tasks: '{{ playbook_dir }}/install/install-aws-cli.yml'
+
   - name: Prepare the container registry URL for parsing
     set_fact:
       container_registry: "{{ lookup('env', 'CONTAINER_REGISTRY') | split('.') }}"
@@ -15,8 +18,8 @@
   - name: Authenticate to the container registry (aws strategy)
     shell: "aws ecr get-login-password --region {{ aws_ecr_region }} | docker login --username AWS --password-stdin {{ lookup('env', 'CONTAINER_REGISTRY') }}"
     environment: 
-      AWS_ACCESS_KEY_ID: "{{ lookup('env', 'CONTAINER_REGISTRY_PASSWORD') | split('~') | first }}"
-      AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'CONTAINER_REGISTRY_PASSWORD') | split('~') | last }}"
+      AWS_ACCESS_KEY_ID: "{{ lookup('env', 'CONTAINER_REGISTRY_USERNAME') }}"
+      AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'CONTAINER_REGISTRY_PASSWORD') }}"
     
 # If the strategy is default, just use the docker login plugin
 - name: Default Strategy
