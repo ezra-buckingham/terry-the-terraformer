@@ -480,6 +480,7 @@ def validate_credentials(ctx_obj, check_containers=True):
                     check_for_required_value('container_registry')
                     check_for_required_value('container_registry_username', hide_input=True)
                     check_for_required_value('container_registry_password', hide_input=True)
+                    check_for_required_value('container_registry_strategy', hide_input=False)
                     container_registry_credentials_checked = True
 
     ctx_obj['required_providers'] = []

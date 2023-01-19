@@ -53,7 +53,7 @@ from core import *
 @click.option('-cRP', '--container_registry_password', help='''
     Password used to authenticate to the container registry (required if deploying containers)
     ''')
-@click.option('-cRS', '--container_registry_strategy', default='default', help='''
+@click.option('-cRS', '--container_registry_strategy', help='''
     Strategy to use for container registry auth (use "aws" when using AWS ECR or "default" for standard username / password auth)
     ''')
 @click.option('-eS', '--elastic_server', help='''
