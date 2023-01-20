@@ -13,7 +13,7 @@ RewriteEngine On
 ############ Start Basic Example Redirect Rule ############
 ## Description: Proxy all trafic to the URL below
 
-RewriteRule ^.*$ https://{{ redirect_to }}:443%{REQUEST_URI} [P]
+RewriteRule ^.*$ https://{{ redirect_to }}:1443%{REQUEST_URI} [P]
 
 ############ End Basic Example Redirect Rule ############
 
