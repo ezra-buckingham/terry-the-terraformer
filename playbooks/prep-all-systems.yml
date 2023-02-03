@@ -23,6 +23,7 @@
   - name: Set the hostname of the server to new_hostname
     ansible.builtin.hostname:
       name: "{{ new_hostname }}"
+    ignore_errors: true
 
   - name: Replace the localhost entry with our new_hostname
     ansible.builtin.lineinfile:
