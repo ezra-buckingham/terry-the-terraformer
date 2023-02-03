@@ -38,6 +38,7 @@ ansible_configuration:
       personal_access_token:
       is_package: true
   # Additional playbooks to run with each command provided
+  # For these to work THEY MUST LIVE in the ./playbooks/custom directory and then the "path" should be the name of the playbook file
   extended_plays:
     create:
       - path:
