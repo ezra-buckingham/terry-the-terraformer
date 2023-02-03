@@ -1,4 +1,5 @@
 import ansible_runner
+from pathlib import Path
 
 from core.binary_handler import BinaryHandler
 from core.log_handler import LogHandler
@@ -6,6 +7,9 @@ from core.log_handler import LogHandler
 class AnsibleHandler:
     """
     A Class used for handling all interactions with Ansible.
+    
+    The `working_dir` is critically important as it will give the central place for ansible
+    to put all log files, artifacts, and give guidance to finding the inventory file.
     """
 
     """
@@ -20,6 +24,9 @@ class AnsibleHandler:
 
     def run_playbook(self, playbook_path, user=None, playbook_vars=None, inventory=None, retry_limit=3, **kwargs):
 
+        # Convert the playbook path to a Path
+        playbook_path = Path(playbook_path)
+        
         LogHandler.debug(f'Running the "{ playbook_path }" playbook')
 
         command_line_args = ''
@@ -30,7 +37,7 @@ class AnsibleHandler:
         
         runner_args = {
             'private_data_dir': self.working_dir, 
-            'playbook': playbook_path,
+            'playbook': str(playbook_path),
             'cmdline': command_line_args, 
             'extravars': playbook_vars
         }

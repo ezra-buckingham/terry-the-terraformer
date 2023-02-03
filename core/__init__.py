@@ -243,7 +243,7 @@ def configure_redirectors(ctx_obj):
                 LogHandler.warn(f'Unable to automatically configure redirector: redirect_to undefined for "{resource.name}"')
                 continue
             
-            redirect_to_server = get_server_from_uuid_or_name(resource.redirect_to)
+            redirect_to_server = get_server_from_uuid_or_name_or_ipaddress(resource.redirect_to)
             
             if redirect_to_server.nebula_ip:
                 resource.redirect_to = redirect_to_server.nebula_ip
@@ -292,39 +292,47 @@ def prepare_and_run_ansible(ctx):
 
     # Run all the Prep playbooks
     root_playbook_location = '../../../playbooks'
-    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
+    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
     
-    # Check if we need to clean up access from the systems
-    if not ctx.command.name == 'create': ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
+    # # Check if we need to clean up access from the systems
+    # if not ctx.command.name == 'create': ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
     
-    # Prepare all the hosts
-    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
+    # # Prepare all the hosts
+    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
 
-    # Run all the server-type specific playbooks
-    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-lighthouse.yml')
-    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
-    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
-    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
-    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
+    # # Run all the server-type specific playbooks
+    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-lighthouse.yml')
+    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
+    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
+    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
+    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
     
     # Check for additional playbooks
+    LogHandler.debug('Checking for extended_plays defined in the configuration file')
+    
     extended_plays = ctx.obj['config_contents']['ansible_configuration'].get('extended_plays', None)
-    if extended_plays:
-        LogHandler.debug('Checking for extended_plays defined in the configuration file')
-        extended_plays = extended_plays.get(ctx.command.name, None)
+    action_specific_plays = extended_plays.get(ctx.command.name, None)
+    
+    # Check we have extended plays specific to this action
+    if action_specific_plays:
+        LogHandler.debug(f'Found extended_plays defined for command "{ ctx.command.name }" in the configuration file')
         
         # Loop over found plays
-        for play in extended_plays:
+        for play in action_specific_plays:
             # Get the path and extra_vars
-            play_path = play.get('path')
+            play_path = f'{ root_playbook_location }/custom/{ play.get("path") }'
             play_vars = play.get('extra_vars')
             
             # Check if the play actually exists and if so, run it with extra_vars
             if play_path:
-                if not Path(play_path).exists():
+                
+                # Since Ansible will check for playbooks relative to Ansible's working directory, build the path to look for the play
+                absolute_play_path = Path(ctx.obj['ansible_handler'].working_dir).joinpath(Path(play_path))
+                if not absolute_play_path.exists():
                     LogHandler.error(f'Found extended_play at {play_path} for "{ctx.command.name}", but that file was not found on the host')
-                play_path = Path(play_path).absolute()
-                LogHandler.debug(f'Found extended_play at {play_path} for "{ctx.command.name}"')
+                    continue
+                
+                LogHandler.debug(f'Found extended_play at { play_path } for "{ctx.command.name}"')
                 ctx.obj['ansible_handler'].run_playbook(play_path, playbook_vars=play_vars)
     
     LogHandler.info('Ansible setup complete')
@@ -561,7 +569,7 @@ def get_domain_zone_index_from_build(ctx_obj, domain_zone):
 
 
 @click.pass_obj
-def get_server_from_uuid_or_name(ctx_obj, resource_uuid_or_name):
+def get_server_from_uuid_or_name_or_ipaddress(ctx_obj, resource_uuid_or_name):
     """Return the reference to the server given the UUID or name
 
     Args:
@@ -569,13 +577,21 @@ def get_server_from_uuid_or_name(ctx_obj, resource_uuid_or_name):
     Returns
         `resource (Server)`: Reference to the resource 
     """
+    
+    ip_pattern = re.compile(r"^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$")
 
     # Check if we were given a UUID 
     if len(resource_uuid_or_name) == 39 or len(resource_uuid_or_name) == 36:
         if len(resource_uuid_or_name) == 36:
             resource_uuid_or_name = f'id-{ resource_uuid_or_name }'
         resource = [ server for server in  ctx_obj['resources'] if isinstance(server, Server) and server.uuid == resource_uuid_or_name ]
-    # If length doesn't match the UUID, we can safely assume (I hope) we have a name
+    # Check if we were given an IP
+    elif ip_pattern.match(resource_uuid_or_name):
+        # First check the nebula IP
+        resource = [ server for server in  ctx_obj['resources'] if isinstance(server, Server) and server.nebula_ip == resource_uuid_or_name ]
+        # Now append the public IP to the array since the given IP to the function should only match once anyway
+        resource = resource + [ server for server in  ctx_obj['resources'] if isinstance(server, Server) and server.public_ip == resource_uuid_or_name ]
+    # If length doesn't match the UUID or look like an IP, we can safely assume (I hope) we have a name
     else:
         resource = [ server for server in  ctx_obj['resources'] if isinstance(server, Server) and server.name == resource_uuid_or_name ]
 
