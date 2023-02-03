@@ -8,6 +8,7 @@
       - curl
       - python3-pip
     state: present
+    update_cache: yes
 
 - name: Install Docker pip dependency
   ansible.builtin.pip:
