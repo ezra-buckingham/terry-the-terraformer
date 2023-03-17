@@ -292,29 +292,29 @@ def prepare_and_run_ansible(ctx):
 
     # Run all the Prep playbooks
     root_playbook_location = '../../../playbooks'
-    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/wait-for-system-setup.yml')
     
-    # # Check if we need to clean up access from the systems
-    # if not ctx.command.name == 'create': ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
+    # Check if we need to clean up access from the systems
+    if not ctx.command.name == 'create': ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/clean-all-systems.yml')
     
-    # # Prepare all the hosts
-    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
+    # Prepare all the hosts
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/prep-all-systems.yml')
 
-    # # Run all the server-type specific playbooks
-    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-lighthouse.yml')
-    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
-    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
-    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
-    # ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
+    # Run all the server-type specific playbooks
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-lighthouse.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-containers.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-redirector.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-categorization.yml')
+    ctx.obj['ansible_handler'].run_playbook(f'{ root_playbook_location }/setup-mailserver.yml')
     
     # Check for additional playbooks
     LogHandler.debug('Checking for extended_plays defined in the configuration file')
     
     extended_plays = ctx.obj['config_contents']['ansible_configuration'].get('extended_plays', None)
-    action_specific_plays = extended_plays.get(ctx.command.name, None)
+    action_specific_plays = extended_plays.get(ctx.command.name, [])
     
     # Check we have extended plays specific to this action
-    if action_specific_plays:
+    if len(action_specific_plays) > 0:
         LogHandler.debug(f'Found extended_plays defined for command "{ ctx.command.name }" in the configuration file')
         
         # Loop over found plays

@@ -484,7 +484,7 @@ def server(ctx, provider, type, name, redirector_type, redirect_to, domain_to_im
         ctx.invoke(domain, provider=main_domain[1], domain=dmarc_domain, type='TXT', value=dmarc_value)
     elif type == 'redirector':
         # First make sure we have a matching server, which will error out if not
-        if redirect_to: get_server_from_uuid_or_name(redirect_to)
+        if redirect_to: get_server_from_uuid_or_name_or_ipaddress(redirect_to)
         
         # Create the server
         server = Redirector(name, provider, priority_domain, redirector_type, redirect_to)
@@ -546,7 +546,7 @@ def domain(ctx_obj, provider, domain, type, value, server_name):
 
     # Check that we have at least the value OR server_name
     if not value and server_name:
-        server = get_server_from_uuid_or_name(server_name)
+        server = get_server_from_uuid_or_name_or_ipaddress(server_name)
         value = f'{ server.terraform_resource_name }.{ server.uuid }.{ server.terraform_ip_reference }'
     elif value and server_name:
         LogHandler.critical(f'Domain expects to have either "-v" / "--value" OR "-sN" / "--server_name" to be set. Make sure one or the other is set when building a domain')
