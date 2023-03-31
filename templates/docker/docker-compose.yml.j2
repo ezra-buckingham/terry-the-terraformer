@@ -18,5 +18,11 @@ services:
       target: "{{ volume.target }}"
 {% endfor %}
 {% endif %}
+{% if 'environment' in service %}
+    environment:
+{% for env in service.environment %}
+    - {{ env }}
+{% endfor %}
+{% endif %}
 
 {% endfor %}
