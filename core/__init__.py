@@ -314,7 +314,7 @@ def prepare_and_run_ansible(ctx):
     action_specific_plays = extended_plays.get(ctx.command.name, [])
     
     # Check we have extended plays specific to this action
-    if len(action_specific_plays) > 0:
+    if action_specific_plays is not None and len(action_specific_plays) > 0:
         LogHandler.debug(f'Found extended_plays defined for command "{ ctx.command.name }" in the configuration file')
         
         # Loop over found plays
