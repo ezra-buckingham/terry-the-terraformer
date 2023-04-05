@@ -387,6 +387,33 @@ def reconfigure(ctx_obj):
     display_resources()
 
     LogHandler.info('Terry reconfiguring complete!')
+    
+
+@cli.command(name='show')
+@click.pass_obj
+def show(ctx_obj):
+    """Show all resources in a given deployment"""
+
+    LogHandler.info(f'Showing the "{ ctx_obj["operation"] }" plan')
+
+    # Check the operation exists
+    check_for_operation_directory()
+
+    # Read in the existing build manifest
+    parse_build_manifest()
+    
+    # Prepare the core handlers
+    prepare_core_handlers()
+    
+    # Holy shit, we are done! We made it this whole way without any critical errors, that is sick
+    ctx_obj['end_time'] = get_formatted_time()
+    ctx_obj['slack_handler'].send_success(ctx_obj)
+    
+    # Display the resources
+    display_resources()
+
+    LogHandler.info('Terry show complete!')
+
 
 
 #################################################################################################################
