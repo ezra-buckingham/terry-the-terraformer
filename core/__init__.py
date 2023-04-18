@@ -310,7 +310,7 @@ def prepare_and_run_ansible(ctx):
     # Check for additional playbooks
     LogHandler.debug('Checking for extended_plays defined in the configuration file')
     
-    extended_plays = ctx.obj['config_contents']['ansible_configuration'].get('extended_plays', None)
+    extended_plays = ctx.obj['config_contents']['ansible_configuration'].get('extended_plays', {})
     action_specific_plays = extended_plays.get(ctx.command.name, [])
     
     # Check we have extended plays specific to this action
