@@ -156,9 +156,31 @@ proxmox:
     source: "Telmate/proxmox"
     version: "2.9.10"
     required_args:
-      - PM_USER
-      - PM_PASS
+      - PM_API_TOKEN_ID
+      - PM_API_TOKEN_SECRET
+      - PM_API_URL
+      - PM_TARGET_NODE
+      - PM_OS_TEMPLATE
+      - PM_STORAGE_TARGET
   is_registrar: false
+  server:
+    resource_name: proxmox_lxc
+    remote_user: root
+    ip_reference: null
+    terry_defaults:
+      server_size:
+        global: '2:4'
+        teamserver: null
+        lighthouse: null
+        redirector: null
+        categorize: null
+      disk_size: 
+        global: 24
+        teamserver: null
+        lighthouse: null
+        redirector: null
+        categorize: null
+        bare: null
 
 ############ NameCheap ############
 namecheap:

@@ -1,4 +1,5 @@
 import jinja2
+from os import getenv
 
 
 class JinjaHandler:
@@ -12,14 +13,59 @@ class JinjaHandler:
         
         self.template_env.filters.update({
             'is_list': self.__is_list,
+            'env_lookup': self.__env_lookup,
+            'split': self.__split
         })
         
     def __is_list(value):
+        """Jinja filter to check if the variable is a list
+
+        Args:
+            value (any): Variable to check if an object
+
+        Returns:
+            bool: Is the variable a list
+        """
+        
         return isinstance(value, list)
+    
+    
+    def __env_lookup(self, key):
+        """Jinja filter to get an environment variable
+
+        Args:
+            key (str): Environment variable to get
+
+        Returns:
+            str | None: Value of environment variable (None if undefined)
+        """
+        return getenv(key, None)
+    
+
+    def __split(self, string: str, delimiter: str):
+        """Split a string by a delimiter
+
+        Args:
+            string (str): The string to split
+            delimiter (str): Delimiter to split by
+
+        Returns:
+            List: List containing the split string
+        """
+        
+        return string.split(delimiter)
+    
 
     def get_template(self, template_path):
+        """Get the Jinja template
+
+        Args:
+            template_path (Path): The path to the jinja template
+
+        Returns:
+            Template: The jinja template
         """
-        """
+        
         template_path = str(template_path)
         template = self.template_env.get_template(template_path)
         return template

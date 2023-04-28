@@ -85,6 +85,14 @@ namecheap:
   NAMECHEAP_API_USER:
   NAMECHEAP_API_KEY:
 
+proxmox:
+  PM_API_TOKEN_ID:
+  PM_API_TOKEN_SECRET:
+  PM_API_URL:
+  PM_TARGET_NODE:
+  PM_OS_TEMPLATE:
+  PM_STORAGE_TARGET:
+
 # ===================== C2 Configurations =====================
 cobaltstrike:
   COBALTSTRIKE_PASSWORD:

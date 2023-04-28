@@ -1,12 +1,22 @@
-resource "proxmox_vm_qemu" "{{ name }}" {
-  name = ""
-  target_node = ""
-  iso = ""
-  agent = 1
+resource "proxmox_lxc" "{{ uuid }}" {
+  target_node = "{{ 'PM_TARGET_NODE' | env_lookup }}"
+  hostname = "{{ name }}"
+  ostemplate = "{{ 'PM_OS_TEMPLATE' | env_lookup }}"
+  ssh_public_keys = local.pm_ssh_key
+  cores = {{ terraform_size_reference | split(':') | first }}
+  memory = {{ terraform_size_reference | split(':') | last | int * 1024 }}
+  swap = {{ terraform_size_reference | split(':') | last | int * 1024 }}
+  unprivileged = true
+  start = true
 
-  clone = ""
-  full_clone = true
-  memory = "{{ terraform_size_reference }}"
-  vcpus = "{{ terraform_size_reference }}"
-  tags = "{{ operation }}"
+  rootfs {
+    storage = "{{ 'PM_STORAGE_TARGET' | env_lookup }}"
+    size    = "{{ terraform_disk_size_reference }}G"
+  }
+  
+  network {
+    name   = "eth0"
+    bridge = "vmbr0"
+    ip     = "dhcp"
+  }
 }
