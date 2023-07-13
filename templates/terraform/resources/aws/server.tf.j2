@@ -40,7 +40,7 @@ data "aws_ami" "ami-{{ uuid }}" { # Value provided by Jinja
 
   filter {
     name   = "name"
-    values = ["debian-11-amd64-*"]
+    values = ["debian-12-amd64-*"]
   }
   filter {
     name   = "virtualization-type"
