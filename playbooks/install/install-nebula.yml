@@ -14,7 +14,7 @@
 
 - name: Get the Nebula package from GitHub
   ansible.builtin.get_url:
-    url: https://github.com/slackhq/nebula/releases/download/v1.5.2/nebula-linux-amd64.tar.gz
+    url: https://github.com/slackhq/nebula/releases/download/v1.7.2/nebula-linux-amd64.tar.gz
     dest: /opt/nebula
 
 - name: Extract the Nebula package
