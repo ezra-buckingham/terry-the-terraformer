@@ -9,7 +9,7 @@ global:
   terraform_path:
   ansible_path: 
   nebula_path: 
-  nebula_subnet: 10.36.36.0/24
+  nebula_subnet: 10.36.0.0/24
   container_registry: 
   container_registry_username: # If using AWS ECR, specify your AWS_SECRET_KEY_ID
   container_registry_password: # If using AWS ECR, specify your AWS_SECRET_ACCESS_KEY
