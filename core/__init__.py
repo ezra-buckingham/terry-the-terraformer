@@ -754,7 +754,10 @@ def display_resources(ctx):
     
     for resource in ctx.obj['resources']:
         if isinstance(resource, Server):
-            server = [ resource.name, resource.server_type, resource.public_ip, resource.nebula_ip, resource.provider, resource.domain ]
+            server_type = resource.server_type
+            if server_type == "bare" and resource.containers:
+                server_type = "bare ({})".format(",".join(c.name for c in resource.containers))
+            server = [ resource.name, server_type, resource.public_ip, resource.nebula_ip, resource.provider, resource.domain ]
             servers.append(server)
         elif isinstance(resource, Domain):
             for record in resource.domain_records:
